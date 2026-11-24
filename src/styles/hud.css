@@ -1,0 +1,657 @@
+/* ==========================================================================
+   AAA Aerospace Event-Driven Game HUD, Cockpit Telemetry & Tactile Deck
+   Powered by GitHub augmented-ui + @arwes/frames SVG architectural brackets
+   ========================================================================== */
+
+.game-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-space-void);
+}
+
+.game-canvas-host {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-canvas);
+}
+
+.game-canvas-host canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Anchored HUD Overlay Layer */
+.hud-layer {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-hud);
+  pointer-events: none;
+  padding: var(--hud-inset);
+  padding-left: max(var(--hud-inset), var(--safe-left));
+  padding-right: max(var(--hud-inset), var(--safe-right));
+  padding-bottom: max(var(--hud-inset), var(--safe-bottom));
+  display: grid;
+  grid-template-columns: minmax(255px, 345px) 1fr minmax(250px, 335px);
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+}
+
+/* Top-Left Mission & Level Panel (Arwes Nefrex Frame) */
+.hud-top-left {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.hud-mission-box {
+  pointer-events: auto;
+  width: 100%;
+  padding: 8px 12px 9px;
+  --arwes-bg: rgba(6, 14, 28, 0.86);
+  --arwes-line: var(--game-accent, #00d8ff);
+  --arwes-deco: var(--game-accent, #00d8ff);
+  --arwes-glow: rgba(0, 216, 255, 0.32);
+  backdrop-filter: blur(14px);
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.55));
+}
+
+.hud-mission-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hud-mission-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.hud-mission-module {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--game-accent, var(--accent-cyan));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-level-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.hud-level-btn {
+  --aug-tl: 5px;
+  --aug-br: 5px;
+  --aug-border-all: 1px;
+  --aug-border-bg: rgba(125, 185, 255, 0.25);
+  --aug-inlay-bg: rgba(10, 21, 40, 0.82);
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 6px;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all var(--dur-fast);
+}
+
+.hud-level-btn:hover {
+  --aug-border-bg: var(--game-accent, var(--accent-cyan));
+  color: var(--text-primary);
+}
+
+.hud-level-btn.is-active {
+  --aug-border-all: 1.4px;
+  --aug-border-bg: var(--game-accent, var(--accent-cyan));
+  --aug-inlay-bg: linear-gradient(135deg, rgba(0, 216, 255, 0.26), rgba(10, 32, 62, 0.92));
+  color: #ffffff;
+}
+
+.hud-level-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: var(--accent-gold-bright);
+}
+
+.hud-objective-pill {
+  --aug-tl: 6px;
+  --aug-br: 6px;
+  --aug-border-all: 1px;
+  --aug-border-bg: rgba(125, 185, 255, 0.28);
+  --aug-inlay-bg: rgba(6, 15, 30, 0.88);
+  pointer-events: auto;
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 6px 10px;
+  backdrop-filter: blur(12px);
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+.hud-objective-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(0, 216, 255, 0.16);
+  border: 1px solid rgba(0, 216, 255, 0.32);
+  color: var(--accent-cyan-bright);
+  flex-shrink: 0;
+}
+
+/* Top-Right Event-Driven Cockpit Telemetry Strip */
+.hud-top-right {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.hud-telemetry-grid {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.hud-metric-card {
+  --aug-tl: 6px;
+  --aug-br: 6px;
+  --aug-border-all: 1px;
+  --aug-border-bg: rgba(125, 185, 255, 0.28);
+  --aug-inlay-bg: linear-gradient(155deg, rgba(10, 22, 42, 0.88), rgba(5, 12, 24, 0.94));
+  padding: 7px 10px;
+  backdrop-filter: blur(12px);
+  transition: filter var(--dur-fast);
+}
+
+.hud-metric-card[data-status='nominal'] {
+  --aug-border-bg: rgba(34, 211, 122, 0.56);
+}
+
+.hud-metric-card[data-status='caution'] {
+  --aug-border-bg: rgba(245, 166, 35, 0.78);
+  --aug-inlay-bg: linear-gradient(155deg, rgba(50, 32, 8, 0.9), rgba(26, 16, 4, 0.95));
+}
+
+.hud-metric-card[data-status='critical'] {
+  --aug-border-all: 1.5px;
+  --aug-border-bg: rgba(255, 71, 87, 0.92);
+  --aug-inlay-bg: linear-gradient(155deg, rgba(64, 14, 22, 0.92), rgba(32, 6, 10, 0.96));
+  filter: drop-shadow(0 0 10px rgba(255, 71, 87, 0.35));
+}
+
+.hud-metric-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+}
+
+.hud-metric-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.hud-metric-card[data-status='info'] .hud-metric-status { color: var(--status-info); }
+.hud-metric-card[data-status='nominal'] .hud-metric-status { color: var(--status-nominal); }
+.hud-metric-card[data-status='caution'] .hud-metric-status { color: var(--status-caution); }
+.hud-metric-card[data-status='critical'] .hud-metric-status { color: var(--status-critical); }
+
+.hud-metric-val {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-shadow: 0 0 10px rgba(0, 216, 255, 0.18);
+}
+
+.hud-metric-bar {
+  margin-top: 4px;
+  height: 4px;
+  width: 100%;
+  border-radius: 2px;
+  background: rgba(130, 195, 255, 0.14);
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.hud-metric-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #0284c7, #00e5ff);
+  box-shadow: 0 0 8px rgba(0, 216, 255, 0.55);
+  transition: width 120ms linear, background-color 180ms ease;
+}
+
+.hud-metric-card[data-status='nominal'] .hud-metric-bar-fill {
+  background: linear-gradient(90deg, #16a34a, #22d37a);
+  box-shadow: 0 0 8px rgba(34, 211, 122, 0.55);
+}
+
+.hud-metric-card[data-status='caution'] .hud-metric-bar-fill {
+  background: linear-gradient(90deg, #d97706, #fbbf24);
+  box-shadow: 0 0 8px rgba(245, 166, 35, 0.55);
+}
+
+.hud-metric-card[data-status='critical'] .hud-metric-bar-fill {
+  background: linear-gradient(90deg, #dc2626, #ff4757);
+  box-shadow: 0 0 10px rgba(255, 71, 87, 0.7);
+}
+
+/* Bottom-Left Action Toolbar */
+.hud-bottom-left {
+  grid-column: 1;
+  grid-row: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.hud-tool-row {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hud-btn {
+  --aug-tl: 5px;
+  --aug-br: 5px;
+  --aug-border-all: 1px;
+  --aug-border-bg: rgba(125, 185, 255, 0.34);
+  --aug-inlay-bg: linear-gradient(180deg, rgba(14, 28, 52, 0.88), rgba(7, 15, 30, 0.94));
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 11px;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  backdrop-filter: blur(12px);
+  transition: transform var(--dur-fast), filter var(--dur-fast);
+}
+
+.hud-btn:hover {
+  --aug-border-bg: var(--accent-cyan);
+  transform: translateY(-1px);
+  filter: drop-shadow(0 0 8px rgba(0, 216, 255, 0.35));
+}
+
+.hud-btn.is-toggled {
+  --aug-border-all: 1.4px;
+  --aug-border-bg: var(--accent-cyan);
+  --aug-inlay-bg: linear-gradient(135deg, rgba(0, 180, 230, 0.32), rgba(8, 28, 56, 0.95));
+  color: #e0f9ff;
+  filter: drop-shadow(0 0 10px rgba(0, 216, 255, 0.42));
+}
+
+.hud-controls-chip {
+  --aug-tl: 5px;
+  --aug-br: 5px;
+  --aug-border-all: 1px;
+  --aug-border-bg: rgba(125, 185, 255, 0.18);
+  --aug-inlay-bg: rgba(5, 12, 24, 0.82);
+  pointer-events: auto;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* Bottom-Center Cockpit Tactile Control Deck */
+.hud-bottom-center {
+  grid-column: 2;
+  grid-row: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.hud-tactile-deck {
+  --aug-tl: 10px;
+  --aug-tr: 10px;
+  --aug-bl: 6px;
+  --aug-br: 6px;
+  --aug-border-all: 1.2px;
+  --aug-border-bg: linear-gradient(90deg, rgba(0, 216, 255, 0.55), rgba(148, 197, 255, 0.25) 50%, rgba(245, 166, 35, 0.5));
+  --aug-inlay-bg: linear-gradient(180deg, rgba(11, 22, 42, 0.92), rgba(5, 11, 23, 0.97));
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  backdrop-filter: blur(14px);
+  filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.65));
+}
+
+.hud-tactile-deck:empty {
+  display: none;
+}
+
+.deck-ctrl-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 0 13px;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  border: 1px solid rgba(125, 185, 255, 0.35);
+  background: linear-gradient(180deg, rgba(22, 42, 76, 0.92) 0%, rgba(10, 21, 42, 0.96) 100%);
+  box-shadow: var(--specular-top), inset 0 -2px 0 rgba(0, 0, 0, 0.45);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  transition: all var(--dur-fast) var(--ease-orbital);
+}
+
+.deck-ctrl-btn:hover {
+  border-color: var(--accent-cyan);
+  background: linear-gradient(180deg, rgba(28, 58, 102, 0.96) 0%, rgba(12, 28, 56, 0.98) 100%);
+  box-shadow: var(--specular-top), 0 0 12px rgba(0, 216, 255, 0.28);
+}
+
+.deck-ctrl-btn:active,
+.deck-ctrl-btn.is-active {
+  border-color: var(--accent-cyan);
+  background: linear-gradient(180deg, rgba(0, 150, 210, 0.48), rgba(6, 36, 68, 0.96));
+  color: #fff;
+  transform: translateY(1px) scale(0.98);
+  box-shadow: inset 0 2px 8px rgba(0, 216, 255, 0.35);
+}
+
+.deck-ctrl-btn.is-gold {
+  border-color: rgba(245, 166, 35, 0.65);
+  background: linear-gradient(180deg, rgba(64, 42, 10, 0.9), rgba(34, 21, 4, 0.96));
+  color: var(--accent-gold-bright);
+}
+
+.deck-ctrl-btn.is-gold:hover {
+  border-color: var(--accent-gold-bright);
+  box-shadow: 0 0 14px rgba(245, 166, 35, 0.32);
+}
+
+.deck-ctrl-btn.is-danger {
+  border-color: rgba(255, 71, 87, 0.68);
+  background: linear-gradient(180deg, rgba(68, 16, 24, 0.92), rgba(36, 8, 12, 0.96));
+  color: #ffb3ba;
+}
+
+.deck-ctrl-btn.is-danger:hover {
+  border-color: var(--status-critical);
+  box-shadow: 0 0 14px rgba(255, 71, 87, 0.35);
+}
+
+.deck-slider-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  background: var(--surface-well);
+  border: 1px solid rgba(0, 216, 255, 0.22);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.deck-slider-group input[type='range'] {
+  width: 102px;
+  accent-color: var(--accent-cyan);
+  cursor: pointer;
+}
+
+/* Bottom-Right Contextual Science Toast Queue (Out-of-flow so tactile deck stays rock-solid) */
+.hud-bottom-right {
+  position: absolute;
+  right: max(var(--hud-inset), var(--safe-right));
+  bottom: max(var(--hud-inset), var(--safe-bottom));
+  width: min(304px, 28vw);
+  z-index: var(--z-toast);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+
+.science-toast {
+  --aug-tl: 8px;
+  --aug-br: 8px;
+  --aug-border-all: 1px;
+  --aug-border-bg: rgba(0, 216, 255, 0.65);
+  --aug-inlay-bg: linear-gradient(155deg, rgba(8, 20, 40, 0.94), rgba(4, 10, 22, 0.97));
+  pointer-events: auto;
+  width: 100%;
+  padding: 9px 12px;
+  backdrop-filter: blur(14px);
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.6));
+  animation: slideToast 240ms var(--ease-orbital);
+}
+
+.science-toast[data-tone='caution'] {
+  --aug-border-bg: rgba(245, 166, 35, 0.8);
+}
+
+.science-toast[data-tone='nominal'] {
+  --aug-border-bg: rgba(34, 211, 122, 0.78);
+}
+
+.science-toast[data-tone='critical'] {
+  --aug-border-bg: rgba(255, 71, 87, 0.9);
+}
+
+@keyframes slideToast {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.science-toast-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-cyan-bright);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.science-toast[data-tone='caution'] .science-toast-tag { color: var(--status-caution); }
+.science-toast[data-tone='nominal'] .science-toast-tag { color: var(--status-nominal); }
+.science-toast[data-tone='critical'] .science-toast-tag { color: var(--status-critical); }
+
+.science-toast-text {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.42;
+}
+
+/* ---------------- Briefing & Dual-Dimension Result Cards ---------------- */
+.briefing-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.briefing-step-card {
+  --aug-tl: 8px;
+  --aug-br: 8px;
+  --aug-border-all: 1px;
+  --aug-border-bg: rgba(0, 216, 255, 0.3);
+  --aug-inlay-bg: linear-gradient(160deg, rgba(10, 22, 42, 0.92), rgba(5, 11, 24, 0.96));
+  padding: 15px;
+}
+
+.briefing-step-num {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--accent-cyan);
+  letter-spacing: 0.12em;
+  margin-bottom: 6px;
+}
+
+.briefing-step-card h3 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 14.5px;
+}
+
+.briefing-step-card p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 16px;
+}
+
+.result-score-box,
+.result-science-box {
+  --aug-tl: 9px;
+  --aug-br: 9px;
+  --aug-border-all: 1px;
+  --aug-border-bg: rgba(125, 185, 255, 0.3);
+  --aug-inlay-bg: linear-gradient(160deg, rgba(10, 22, 42, 0.92), rgba(5, 12, 24, 0.96));
+  padding: 16px;
+}
+
+.result-science-box {
+  --aug-border-bg: rgba(0, 216, 255, 0.56);
+  --aug-inlay-bg: linear-gradient(155deg, rgba(12, 34, 64, 0.94), rgba(6, 16, 32, 0.97));
+}
+
+.result-stars-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent-gold-bright);
+  margin-bottom: 8px;
+}
+
+.result-stars-display svg {
+  width: 28px;
+  height: 28px;
+  filter: drop-shadow(0 0 8px rgba(245, 166, 35, 0.55));
+}
+
+.result-metrics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.result-metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-radius: 4px;
+  background: rgba(14, 30, 56, 0.72);
+  border-left: 2px solid rgba(0, 216, 255, 0.45);
+  font-size: 13px;
+}
+
+.result-science-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--accent-cyan);
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+}
+
+.result-science-title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 16.5px;
+  font-weight: 700;
+}
+
+.result-compare-block {
+  padding: 9px 11px;
+  border-radius: 5px;
+  background: rgba(4, 11, 24, 0.78);
+  border: 1px solid rgba(0, 216, 255, 0.18);
+  margin-bottom: 9px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.result-compare-block strong {
+  display: block;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+@media (max-width: 980px) {
+  .hud-layer {
+    grid-template-columns: 1fr 1fr;
+  }
+  .hud-top-right {
+    grid-column: 2;
+  }
+  .hud-bottom-center {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    align-items: flex-end;
+  }
+  .briefing-steps,
+  .result-grid {
+    grid-template-columns: 1fr;
+  }
+}

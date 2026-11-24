@@ -1,0 +1,45 @@
+# Screen Stack & Component Architecture Contract
+# Enforces Screen Stack (never loose boolean flags) & Event-Driven HUD
+
+screen_stack:
+  base_screens:
+    - id: hub
+      name: 空间站全景中枢 (Interactive Station Deck)
+      primary_action: 点击空间站舱段或任务栏进入任意子游戏
+      focus_on_open: first-module-button
+    - id: game
+      name: 子游戏任务视口 (Active Game Viewport 01-08)
+      primary_action: 直接操作核心物理/系统机制完成3级任务
+      focus_on_open: game-canvas
+  modal_overlays:
+    - id: briefing
+      name: 任务简报与操作引导 (3-step skippable)
+      trap_focus: true
+      dismiss_on_esc: true
+    - id: codex
+      name: 航天科普档案馆 (Orbital Codex 24 Entries)
+      trap_focus: true
+      dismiss_on_esc: true
+    - id: result
+      name: 双维度结算与真实空间站对照卡
+      trap_focus: true
+      dismiss_on_esc: true
+
+persistent_shell:
+  - component: QuickDockBar
+    position: top-anchored (56px height)
+    features:
+      - Station Hub home button (Esc)
+      - 8 module quick-switch pills with live star/status badges (keys 1-8)
+      - Total medals counter & station readiness indicator
+      - Orbital Codex drawer trigger (Tab)
+      - Audio toggle (M) & Fullscreen toggle (F)
+
+game_hud_contract:
+  update_model: event-driven (HudKit.updateMetric / HudKit.setActionState / HudKit.pushToast)
+  zones:
+    top_left: Mission header + Level switcher (L1/L2/L3) + Objective badge
+    top_right: Compact Telemetry Strip (2-4 critical numeric/bar metrics, tabular-nums)
+    bottom_left: Science Overlay toggle ("原理剖视 V") + Controls hint chip + Restart (R)
+    bottom_right: Contextual Telemetry Science Toast (non-blocking, auto-dismiss)
+    bottom_center: Optional game-specific tactile control deck (touch & mouse friendly)

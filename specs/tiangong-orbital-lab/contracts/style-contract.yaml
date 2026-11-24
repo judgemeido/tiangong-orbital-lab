@@ -1,0 +1,88 @@
+# Single Source of Truth — Visual & UI Contract
+# Generated following GitHub Game UI Skills:
+#   - guiguiyan930-source/game-ui-design-workflow (game-ui-specification)
+#   - gamedev-skills/awesome-gamedev-agent-skills (game-ui-ux)
+#   - omer-metin/skills-for-antigravity (game-ui-design)
+
+project:
+  id: tiangong-orbital-lab
+  title: 天宫·轨道实验室 | Orbital Lab 8-in-1
+  status: approved
+  reference_resolution: 1920x1080
+  scaling_policy: expand-anchored
+  min_canvas_viewport_ratio: 0.78
+
+safe_area:
+  top_bar_height_px: 56
+  edge_inset_px: 14
+  modal_margin_px: 20
+
+visual_language:
+  theme: Aerospace Industrial Blueprint & Precision Telemetry
+  lighting_direction: top-left orbital rim light (315deg)
+  materials:
+    - brushed titanium alloy panels
+    - multi-layer insulation gold foil (MLI)
+    - frosted orbital HUD glass (backdrop blur 12px)
+    - luminous vector schematics
+
+palette:
+  space_void: "#050A14"
+  space_deep: "#0A1426"
+  surface_glass: "rgba(11, 22, 40, 0.86)"
+  surface_elevated: "rgba(17, 32, 56, 0.94)"
+  surface_card: "rgba(14, 27, 48, 0.90)"
+  border_subtle: "rgba(125, 185, 255, 0.22)"
+  border_strong: "rgba(56, 189, 248, 0.55)"
+  text_primary: "#EDF4FF"
+  text_secondary: "#A6C0E0"
+  text_muted: "#6F8DB0"
+  accent_cyan: "#38BDF8"
+  accent_cyan_glow: "rgba(56, 189, 248, 0.35)"
+  accent_gold: "#F59E0B"
+  accent_gold_glow: "rgba(245, 158, 11, 0.32)"
+  status_nominal: "#22C55E"
+  status_caution: "#F59E0B"
+  status_critical: "#EF4444"
+  status_info: "#38BDF8"
+  focus_ring: "#FDE047"
+
+typography:
+  sans: "'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif"
+  mono: "'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace"
+  numeric_variant: tabular-nums
+  sizes:
+    title_lg: 28px
+    title_md: 20px
+    hud_label: 12px
+    hud_value: 18px
+    body: 14px
+    button: 14px
+  contrast_minimum: 4.5
+
+geometry:
+  chamfer_sm: 6px
+  chamfer_md: 10px
+  radius_sm: 6px
+  radius_md: 10px
+  radius_lg: 14px
+  stroke_thin: 1px
+  stroke_accent: 2px
+  button_min_height: 36px
+  touch_target_min: 40px
+
+interaction_states:
+  default: "opacity 1, border_subtle"
+  hover: "border_strong, lift -1px, glow accent_cyan_glow"
+  active: "scale 0.98, inner shadow"
+  focus_visible: "2px solid focus_ring, offset 2px (distinct from hover)"
+  selected: "accent_cyan border + translucent cyan fill"
+  disabled: "opacity 0.42, cursor not-allowed"
+  status_redundancy: "Always pair color with icon + text label (color-blind safe)"
+
+motion:
+  fast_ms: 140
+  normal_ms: 240
+  modal_ms: 280
+  easing: "cubic-bezier(0.22, 1, 0.36, 1)"
+  reduced_motion: "Respect prefers-reduced-motion: reduce"

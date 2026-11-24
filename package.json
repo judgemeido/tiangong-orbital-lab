@@ -1,0 +1,21 @@
+{
+  "name": "tiangong-orbital-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5173",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0"
+  },
+  "dependencies": {
+    "@arwes/frames": "^1.0.0-next.25020502",
+    "@arwes/theme": "^1.0.0-next.25020502",
+    "augmented-ui": "^2.0.0"
+  }
+}
