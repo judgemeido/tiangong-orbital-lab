@@ -1,3 +1,4 @@
+import { drawDebrisModel3D } from '../../core/aerospace-models';
 import {
   clamp,
   drawEarthHorizon,
@@ -9,11 +10,11 @@ import {
   StarfieldRenderer,
 } from '../../core/canvas-utils';
 import {
-  drawAdditiveGlow,
-  drawGlassViewport,
+  drawBakedBackdrop,
   drawTitaniumModule,
-  getTitaniumPattern,
 } from '../../core/materials';
+import { drawModelSprite } from '../../core/model-sprites';
+import { getMaxDpr, isLowPerf, reportFrameDelta } from '../../core/perf-profile';
 import type {
   GameHostAPI,
   GameInstance,
@@ -265,8 +266,14 @@ export const debrisGame: GameModule = {
     let historyTrail: { t: number; alt: number }[] = [];
     let debrisList: DebrisEntity[] = [];
 
-    // Radar layout cache for pointer interaction
+    // Radar layout & static offscreen scope cache (eliminates per-frame text, grid & gradient cost)
     let radarRect = { left: 40, right: 800, top: 130, bottom: 520, stationX: 200 };
+    let radarCacheCanvas: HTMLCanvasElement | null = null;
+    let radarCacheW = 0;
+    let radarCacheH = 0;
+    let radarCacheDpr = 0;
+    let radarCacheStorm = false;
+    let radarCacheLow = false;
 
     // Tactile deck DOM refs
     let upBtnEl: HTMLButtonElement | null = null;
@@ -904,38 +911,27 @@ export const debrisGame: GameModule = {
       ctx.translate(x, y);
       ctx.rotate(pitchRad);
 
-      // Luminous additive thruster plumes & nozzle blooms
+      // Flat translucent thruster plumes & crisp nozzle flames (zero additive/gradients)
       if (burnTimer > 0) {
         if (burnMode === 'up') {
           const fl = 26 + Math.sin(animTime * 45) * 6;
-          drawAdditiveGlow(ctx, -22, 0, 26, '56, 189, 248', 0.62);
-          drawAdditiveGlow(ctx, -21, 0, 12, '240, 249, 255', 0.92);
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          const grad = ctx.createLinearGradient(-19, 0, -19 - fl, 0);
-          grad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
-          grad.addColorStop(0.32, 'rgba(186, 230, 253, 0.9)');
-          grad.addColorStop(0.65, 'rgba(56, 189, 248, 0.55)');
-          grad.addColorStop(1, 'rgba(56, 189, 248, 0)');
-          ctx.fillStyle = grad;
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.72)';
           ctx.beginPath();
           ctx.moveTo(-19, -5.5);
           ctx.lineTo(-19 - fl, 0);
           ctx.lineTo(-19, 5.5);
           ctx.closePath();
           ctx.fill();
-          ctx.restore();
+          ctx.fillStyle = 'rgba(240, 249, 255, 0.9)';
+          ctx.beginPath();
+          ctx.moveTo(-19, -2.5);
+          ctx.lineTo(-19 - fl * 0.52, 0);
+          ctx.lineTo(-19, 2.5);
+          ctx.closePath();
+          ctx.fill();
         } else if (burnMode === 'down') {
           const fl = 20 + Math.sin(animTime * 45) * 5;
-          drawAdditiveGlow(ctx, 20, 0, 22, '245, 158, 11', 0.56);
-          drawAdditiveGlow(ctx, 19, 0, 10, '255, 251, 235', 0.88);
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          const grad = ctx.createLinearGradient(18, 0, 18 + fl, 0);
-          grad.addColorStop(0, 'rgba(255, 251, 235, 0.96)');
-          grad.addColorStop(0.45, 'rgba(251, 191, 36, 0.82)');
-          grad.addColorStop(1, 'rgba(245, 158, 11, 0)');
-          ctx.fillStyle = grad;
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.78)';
           ctx.beginPath();
           ctx.moveTo(18, -6);
           ctx.lineTo(18 + fl, -3);
@@ -944,13 +940,8 @@ export const debrisGame: GameModule = {
           ctx.lineTo(18 + fl, 3);
           ctx.lineTo(18, 6);
           ctx.fill();
-          ctx.restore();
         } else if (burnMode === 'circ') {
-          drawAdditiveGlow(ctx, 0, -14, 14, '125, 211, 252', 0.55);
-          drawAdditiveGlow(ctx, 0, 14, 14, '125, 211, 252', 0.55);
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          ctx.strokeStyle = 'rgba(186, 230, 253, 0.95)';
+          ctx.strokeStyle = 'rgba(186, 230, 253, 0.9)';
           ctx.lineWidth = 2.4;
           ctx.beginPath();
           ctx.moveTo(0, -10);
@@ -958,64 +949,174 @@ export const debrisGame: GameModule = {
           ctx.moveTo(0, 10);
           ctx.lineTo(0, 23);
           ctx.stroke();
-          ctx.restore();
         }
       }
 
-      // Solar wings (top & bottom)
-      drawSolarPanelRect(ctx, -10, -29, 17, 17, 0.92);
-      drawSolarPanelRect(ctx, -10, 12, 17, 17, 0.92);
-
-      // Truss bar connecting wings
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(-3, -12, 4, 24);
-
-      // Aft thruster bell
-      ctx.fillStyle = '#334155';
-      ctx.beginPath();
-      ctx.moveTo(-18, -4.5);
-      ctx.lineTo(-23, -6);
-      ctx.lineTo(-23, 6);
-      ctx.lineTo(-18, 4.5);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
-
-      // Brushed-Titanium Tiangong Core Module with Kapton MLI bands & rivets
-      drawTitaniumModule(ctx, -18, -7, 34, 14, {
-        radius: 4,
-        mliBands: [0.18, 0.72],
-        rivets: true,
-        rimGlow: 'rgba(125, 211, 252, 0.8)',
+      // Studio-rendered 3D Tiangong T-Configuration Space Station rotated to face +X orbital flight vector
+      const usedStation3D = drawModelSprite(ctx, 'tiangong-hub', -29, -22, 58, 44, {
+        rotation: Math.PI * 0.5,
       });
+      if (!usedStation3D) {
+        drawSolarPanelRect(ctx, -10, -29, 17, 17, 0.92);
+        drawSolarPanelRect(ctx, -10, 12, 17, 17, 0.92);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(-3, -12, 4, 24);
+        ctx.fillStyle = '#334155';
+        ctx.beginPath();
+        ctx.moveTo(-18, -4.5);
+        ctx.lineTo(-23, -6);
+        ctx.lineTo(-23, 6);
+        ctx.lineTo(-18, 4.5);
+        ctx.closePath();
+        ctx.fill();
+        drawTitaniumModule(ctx, -18, -7, 34, 14, {
+          radius: 4,
+          mliBands: [0.18, 0.72],
+          rivets: true,
+          rimGlow: 'rgba(125, 211, 252, 0.8)',
+        });
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.arc(16.5, 0, 5.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
-      // Forward docking node sphere with metallic radial shading
-      const hubGrad = ctx.createRadialGradient(15, -2, 1, 16.5, 0, 6);
-      hubGrad.addColorStop(0, '#ffffff');
-      hubGrad.addColorStop(0.45, '#cbd5e1');
-      hubGrad.addColorStop(1, '#334155');
-      ctx.fillStyle = hubGrad;
+      // Navigation strobe
+      const strobeOn = Math.sin(animTime * 5.2) > 0.25;
+      ctx.fillStyle = strobeOn ? '#ffffff' : '#22c55e';
       ctx.beginPath();
-      ctx.arc(16.5, 0, 5.4, 0, Math.PI * 2);
+      ctx.arc(16.5, -5.5, 2.2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(186, 230, 253, 0.72)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      // Telemetry viewport accent + blinking navigation strobe
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillRect(-9, -2, 7, 3.6);
-      const strobeA = 0.35 + 0.55 * Math.max(0, Math.sin(animTime * 5.2));
-      drawAdditiveGlow(ctx, 16.5, -5.5, 7, '74, 222, 128', strobeA);
 
       ctx.restore();
     };
 
+    const ensureRadarStaticCache = (
+      w: number,
+      h: number,
+      dpr: number,
+      rLeft: number,
+      rTop: number,
+      rRight: number,
+      rBot: number,
+      rW: number,
+      rH: number,
+      stX: number,
+      stormActive: boolean,
+      lowPerf: boolean
+    ): HTMLCanvasElement => {
+      if (
+        radarCacheCanvas &&
+        radarCacheW === w &&
+        radarCacheH === h &&
+        radarCacheDpr === dpr &&
+        radarCacheStorm === stormActive &&
+        radarCacheLow === lowPerf
+      ) {
+        return radarCacheCanvas;
+      }
+
+      if (!radarCacheCanvas) radarCacheCanvas = document.createElement('canvas');
+      radarCacheCanvas.width = Math.max(1, Math.floor(w * dpr));
+      radarCacheCanvas.height = Math.max(1, Math.floor(h * dpr));
+      radarCacheW = w;
+      radarCacheH = h;
+      radarCacheDpr = dpr;
+      radarCacheStorm = stormActive;
+      radarCacheLow = lowPerf;
+
+      const sctx = radarCacheCanvas.getContext('2d')!;
+      sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      sctx.clearRect(0, 0, w, h);
+
+      const altToYStatic = (aKm: number) => {
+        const norm = (aKm - ALT_VIEW_MIN) / (ALT_VIEW_MAX - ALT_VIEW_MIN);
+        return rBot - norm * rH;
+      };
+      const timeToXStatic = (tSec: number) => {
+        if (tSec >= 0) {
+          return stX + (tSec / RADAR_LEAD_SEC) * (rRight - stX);
+        }
+        return stX + (tSec / RADAR_TRAIL_SEC) * (stX - rLeft);
+      };
+
+      // Translucent Military/CNSA Aerospace Radar Scope Frame
+      sctx.save();
+      sctx.fillStyle = lowPerf ? 'rgba(4, 13, 28, 0.72)' : 'rgba(4, 13, 28, 0.56)';
+      roundRectPath(sctx, rLeft, rTop, rW, rH, 14);
+      sctx.fill();
+
+      sctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+      sctx.lineWidth = 1.5;
+      roundRectPath(sctx, rLeft, rTop, rW, rH, 14);
+      sctx.stroke();
+
+      roundRectPath(sctx, rLeft + 1, rTop + 1, rW - 2, rH - 2, 13);
+      sctx.clip();
+
+      // Upper 425 km Ceiling Zone
+      const ceilY = altToYStatic(ALT_CEIL);
+      sctx.fillStyle = 'rgba(244, 63, 94, 0.14)';
+      sctx.fillRect(rLeft, rTop, rW, Math.max(0, ceilY - rTop));
+
+      // Lower 380 km Atmospheric Decay Hazard Floor (flat translucent fill, no gradient)
+      const floorY = altToYStatic(ALT_FLOOR);
+      sctx.fillStyle = stormActive ? 'rgba(239, 68, 68, 0.34)' : 'rgba(249, 115, 22, 0.24)';
+      sctx.fillRect(rLeft, floorY, rW, rBot - floorY);
+
+      // Horizontal Altitude Grid Lines & Labels (380..425 km)
+      const gridAlts = [380, 390, 400, 410, 420, 425];
+      sctx.font = '700 10.5px "JetBrains Mono", monospace';
+      sctx.textAlign = 'left';
+      for (const ga of gridAlts) {
+        const gy = altToYStatic(ga);
+        const isFloor = ga === 380;
+        const isCeil = ga === 425;
+        const isNom = ga === 400;
+        sctx.strokeStyle = isFloor
+          ? 'rgba(239, 68, 68, 0.85)'
+          : isCeil
+            ? 'rgba(244, 63, 94, 0.55)'
+            : isNom
+              ? 'rgba(56, 189, 248, 0.36)'
+              : 'rgba(148, 185, 235, 0.13)';
+        sctx.lineWidth = isFloor ? 2 : isNom ? 1.3 : 1;
+        if (isFloor || isCeil) sctx.setLineDash([7, 5]);
+        else sctx.setLineDash([]);
+        sctx.beginPath();
+        sctx.moveTo(rLeft, gy);
+        sctx.lineTo(rRight, gy);
+        sctx.stroke();
+
+        sctx.fillStyle = isFloor ? '#fca5a5' : isNom ? '#7dd3fc' : '#708db0';
+        const tag = isFloor ? '380 km 大气坠毁红线' : isNom ? '400 km 标准轨高' : `${ga} km`;
+        sctx.fillText(tag, rLeft + 10, isCeil ? gy + 12 : gy - 4);
+      }
+      sctx.setLineDash([]);
+
+      // Vertical Time-to-Conjunction Grid Lines & Labels (T-0 .. T-10s)
+      sctx.font = '600 10px "JetBrains Mono", monospace';
+      for (let ts = 0; ts <= 10; ts += 2) {
+        const tx = timeToXStatic(ts);
+        sctx.strokeStyle = ts === 0 ? 'rgba(56, 189, 248, 0.34)' : 'rgba(148, 185, 235, 0.09)';
+        sctx.lineWidth = ts === 0 ? 1.4 : 1;
+        sctx.beginPath();
+        sctx.moveTo(tx, rTop);
+        sctx.lineTo(tx, rBot);
+        sctx.stroke();
+
+        sctx.fillStyle = ts === 0 ? '#7dd3fc' : '#64748b';
+        sctx.textAlign = ts === 10 ? 'right' : 'center';
+        sctx.fillText(ts === 0 ? '空间站位置 (T-0)' : `T-${ts}s`, ts === 10 ? tx - 4 : tx, rTop + 14);
+      }
+      sctx.restore();
+      return radarCacheCanvas;
+    };
+
     const render = () => {
       const { width: w, height: h } = canvasHandle.getSize();
-      ctx.clearRect(0, 0, w, h);
+      const lowPerf = isLowPerf();
+      const dpr = Math.min(window.devicePixelRatio || 1, getMaxDpr());
 
       ctx.save();
       if (screenShake > 0.01) {
@@ -1023,96 +1124,81 @@ export const debrisGame: GameModule = {
         ctx.translate((Math.random() - 0.5) * mag, (Math.random() - 0.5) * mag);
       }
 
-      // Deep orbital starfield + night-side Earth vista (golden city lights & emerald orbital aurora!)
-      starfield.draw(ctx, w, h, animTime, -animTime * 28, 0);
-      drawEarthHorizon(ctx, w, h, animTime, {
-        yRatio: 1.78,
-        radiusScale: 1.18,
-        sunPhase: 0.28,
-        nightMode: true,
-        darken: 0.34,
-      });
+      // Baked Opaque Night-Earth Backdrop (1 integer drawImage when cached)
+      if (!drawBakedBackdrop(ctx, 'earth-night', w, h, 0.34, 0.28)) {
+        starfield.draw(ctx, w, h, animTime, -animTime * 28, 0);
+        drawEarthHorizon(ctx, w, h, animTime, {
+          yRatio: 1.78,
+          radiusScale: 1.18,
+          sunPhase: 0.28,
+          nightMode: true,
+          darken: 0.34,
+        });
+      }
 
-      // Safe Play Area radar viewport (clear of top HUD cards and bottom tactile deck)
-      const rTop = h >= 680 ? Math.max(152, h * 0.195) : Math.max(122, h * 0.175);
-      const rBot = Math.min(h - 138, h * 0.835);
-      const rLeft = Math.max(26, w * 0.036);
-      const rRight = w - Math.max(26, w * 0.036);
+      // Safe Play Area radar viewport (compact-aware for 1366x768 & 1366x653!)
+      const compact = h <= 720;
+      const rTop = compact ? Math.max(104, h * 0.16) : Math.max(152, h * 0.195);
+      const rBot = Math.min(h - (compact ? 82 : 138), h * 0.865);
+      const rLeft = Math.max(24, w * 0.032);
+      const rRight = w - Math.max(24, w * 0.032);
       const rW = rRight - rLeft;
       const rH = rBot - rTop;
       const stX = rLeft + rW * 0.21;
       radarRect = { left: rLeft, right: rRight, top: rTop, bottom: rBot, stationX: stX };
 
-      // Translucent Military/CNSA Aerospace Radar Scope Frame (lets golden city lights & aurora shimmer through)
-      ctx.save();
-      ctx.fillStyle = 'rgba(4, 13, 28, 0.56)';
-      roundRectPath(ctx, rLeft, rTop, rW, rH, 14);
-      ctx.fill();
+      const stormInfo = getStormInfo(elapsed);
+      const cachedScope = ensureRadarStaticCache(
+        w,
+        h,
+        dpr,
+        rLeft,
+        rTop,
+        rRight,
+        rBot,
+        rW,
+        rH,
+        stX,
+        stormInfo.mult > 1.2,
+        lowPerf
+      );
+      ctx.drawImage(cachedScope, 0, 0, w, h);
 
-      // Subtle brushed titanium perimeter trim & optical border
-      const tiRim = getTitaniumPattern(ctx);
-      if (tiRim) {
+      // Storm border pulse alert overlay (only when solar storm active)
+      if (currentStormLabel) {
         ctx.save();
-        ctx.strokeStyle = tiRim;
-        ctx.lineWidth = 5;
+        ctx.strokeStyle = `rgba(249, 115, 22, ${0.52 + 0.35 * Math.sin(animTime * 7)})`;
+        ctx.lineWidth = 2.2;
         roundRectPath(ctx, rLeft, rTop, rW, rH, 14);
         ctx.stroke();
         ctx.restore();
       }
-      ctx.strokeStyle = currentStormLabel
-        ? `rgba(249, 115, 22, ${0.52 + 0.35 * Math.sin(animTime * 7)})`
-        : 'rgba(56, 189, 248, 0.45)';
-      ctx.lineWidth = currentStormLabel ? 2.2 : 1.5;
-      roundRectPath(ctx, rLeft, rTop, rW, rH, 14);
-      ctx.stroke();
 
-      // Clip interior of radar screen
+      // Clip interior of live dynamic radar overlays
+      ctx.save();
       roundRectPath(ctx, rLeft + 1, rTop + 1, rW - 2, rH - 2, 13);
       ctx.clip();
 
-      // Sleek Translucent Sweeping Conic Radar Beam + Pulsing Range Wave
+      // Flat Translucent Sweeping Conic Radar Wedge + Leading Scan Line (no gradient/lighter)
       const stY = altToY(alt);
       const maxBeamR = rW * 0.96;
       const sweepLead = Math.sin(animTime * 1.15) * 0.46;
       const sweepDir = Math.cos(animTime * 1.15) >= 0 ? 1 : -1;
-      const wedgeSpan = 0.34;
-      const wedgeSlices = 14;
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      for (let s = 0; s < wedgeSlices; s++) {
-        const f0 = s / wedgeSlices;
-        const f1 = (s + 1) / wedgeSlices;
-        const a0 = sweepLead - sweepDir * wedgeSpan * f0;
-        const a1 = sweepLead - sweepDir * wedgeSpan * f1;
-        const sliceAlpha = Math.pow(1 - f0, 1.9) * 0.14;
-        const segGrad = ctx.createRadialGradient(stX, stY, 16, stX, stY, maxBeamR);
-        segGrad.addColorStop(0, `rgba(56, 189, 248, ${(sliceAlpha * 1.5).toFixed(3)})`);
-        segGrad.addColorStop(0.5, `rgba(16, 185, 129, ${(sliceAlpha * 0.85).toFixed(3)})`);
-        segGrad.addColorStop(1, 'rgba(16, 185, 129, 0)');
-        ctx.fillStyle = segGrad;
-        ctx.beginPath();
-        ctx.moveTo(stX, stY);
-        ctx.arc(stX, stY, maxBeamR, Math.min(a0, a1), Math.max(a0, a1));
-        ctx.closePath();
-        ctx.fill();
-      }
-      // Crisp leading-edge radar scan line
-      const beamGrad = ctx.createLinearGradient(
-        stX,
-        stY,
-        stX + Math.cos(sweepLead) * maxBeamR,
-        stY + Math.sin(sweepLead) * maxBeamR
-      );
-      beamGrad.addColorStop(0, 'rgba(125, 211, 252, 0.72)');
-      beamGrad.addColorStop(0.55, 'rgba(52, 211, 153, 0.34)');
-      beamGrad.addColorStop(1, 'rgba(52, 211, 153, 0)');
-      ctx.strokeStyle = beamGrad;
+      const aTail = sweepLead - sweepDir * 0.32;
+
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.08)';
+      ctx.beginPath();
+      ctx.moveTo(stX, stY);
+      ctx.arc(stX, stY, maxBeamR, Math.min(aTail, sweepLead), Math.max(aTail, sweepLead));
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.55)';
       ctx.lineWidth = 1.6;
       ctx.beginPath();
       ctx.moveTo(stX, stY);
       ctx.lineTo(stX + Math.cos(sweepLead) * maxBeamR, stY + Math.sin(sweepLead) * maxBeamR);
       ctx.stroke();
-      ctx.restore();
 
       const sweepR = ((animTime * 190) % (rW * 0.95));
       ctx.strokeStyle = 'rgba(56, 189, 248, 0.16)';
@@ -1121,75 +1207,15 @@ export const debrisGame: GameModule = {
       ctx.arc(stX, stY, sweepR, -Math.PI * 0.42, Math.PI * 0.42);
       ctx.stroke();
 
-      // Faint concentric radar range rings
+      // Batched concentric range rings around station (1 path instead of 6 strokes)
       ctx.strokeStyle = 'rgba(125, 185, 255, 0.08)';
       ctx.lineWidth = 1;
+      ctx.beginPath();
       for (let rr = 140; rr < rW; rr += 140) {
-        ctx.beginPath();
+        ctx.moveTo(stX + Math.cos(-Math.PI * 0.46) * rr, stY + Math.sin(-Math.PI * 0.46) * rr);
         ctx.arc(stX, stY, rr, -Math.PI * 0.46, Math.PI * 0.46);
-        ctx.stroke();
       }
-
-      // Upper 425 km Ceiling Zone
-      const ceilY = altToY(ALT_CEIL);
-      ctx.fillStyle = 'rgba(244, 63, 94, 0.14)';
-      ctx.fillRect(rLeft, rTop, rW, Math.max(0, ceilY - rTop));
-
-      // Lower 380 km Atmospheric Decay Hazard Floor (glowing orange-red!)
-      const floorY = altToY(ALT_FLOOR);
-      const stormInfo = getStormInfo(elapsed);
-      const floorGrad = ctx.createLinearGradient(0, floorY - 12, 0, rBot);
-      floorGrad.addColorStop(0, 'rgba(249, 115, 22, 0)');
-      floorGrad.addColorStop(0.22, stormInfo.mult > 1.2 ? 'rgba(239, 68, 68, 0.36)' : 'rgba(249, 115, 22, 0.24)');
-      floorGrad.addColorStop(1, 'rgba(185, 28, 28, 0.62)');
-      ctx.fillStyle = floorGrad;
-      ctx.fillRect(rLeft, floorY - 12, rW, rBot - floorY + 12);
-
-      // Horizontal Altitude Grid Lines (380, 390, 400, 410, 420 km)
-      const gridAlts = [380, 390, 400, 410, 420, 425];
-      for (const ga of gridAlts) {
-        const gy = altToY(ga);
-        const isFloor = ga === 380;
-        const isCeil = ga === 425;
-        const isNom = ga === 400;
-        ctx.strokeStyle = isFloor
-          ? 'rgba(239, 68, 68, 0.85)'
-          : isCeil
-            ? 'rgba(244, 63, 94, 0.55)'
-            : isNom
-              ? 'rgba(56, 189, 248, 0.36)'
-              : 'rgba(148, 185, 235, 0.13)';
-        ctx.lineWidth = isFloor ? 2 : isNom ? 1.3 : 1;
-        if (isFloor || isCeil) ctx.setLineDash([7, 5]);
-        else ctx.setLineDash([]);
-        ctx.beginPath();
-        ctx.moveTo(rLeft, gy);
-        ctx.lineTo(rRight, gy);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        ctx.fillStyle = isFloor ? '#fca5a5' : isNom ? '#7dd3fc' : '#708db0';
-        ctx.font = '700 10.5px "JetBrains Mono", monospace';
-        ctx.textAlign = 'left';
-        const tag = isFloor ? '380 km 大气坠毁红线' : isNom ? '400 km 标准轨高' : `${ga} km`;
-        ctx.fillText(tag, rLeft + 10, isCeil ? gy + 12 : gy - 4);
-      }
-
-      // Vertical Time-to-Conjunction Grid Lines (T-0 .. T-10s)
-      for (let ts = 0; ts <= 10; ts += 2) {
-        const tx = timeToX(ts);
-        ctx.strokeStyle = ts === 0 ? 'rgba(56, 189, 248, 0.34)' : 'rgba(148, 185, 235, 0.09)';
-        ctx.lineWidth = ts === 0 ? 1.4 : 1;
-        ctx.beginPath();
-        ctx.moveTo(tx, rTop);
-        ctx.lineTo(tx, rBot);
-        ctx.stroke();
-
-        ctx.fillStyle = ts === 0 ? '#7dd3fc' : '#64748b';
-        ctx.font = '600 10px "JetBrains Mono", monospace';
-        ctx.textAlign = ts === 10 ? 'right' : 'center';
-        ctx.fillText(ts === 0 ? '空间站位置 (T-0)' : `T-${ts}s`, ts === 10 ? tx - 4 : tx, rTop + 14);
-      }
+      ctx.stroke();
 
       // Historical wake trail behind station
       if (historyTrail.length > 1) {
@@ -1209,7 +1235,7 @@ export const debrisGame: GameModule = {
       const simPred = { alt, vz, burnMode, burnTimer };
       const predPoints: { tau: number; x: number; y: number; alt: number; danger: boolean }[] = [];
       let predictedImpactPoint: { x: number; y: number; label: string } | null = null;
-      const stepDt = 0.1;
+      const stepDt = 0.12;
       for (let i = 0; i <= Math.round(PREDICT_SEC / stepDt); i++) {
         const tau = i * stepDt;
         const px = timeToX(tau);
@@ -1229,18 +1255,25 @@ export const debrisGame: GameModule = {
         integrateOrbitalStep(simPred, elapsed + tau, stepDt);
       }
 
-      // Draw dashed green (or red where dangerous) predicted trajectory
+      // Draw batched dashed green/red predicted trajectory polylines (1-3 strokes instead of 84!)
       ctx.save();
       ctx.lineWidth = 2.4;
       ctx.setLineDash([7, 5]);
-      for (let i = 1; i < predPoints.length; i++) {
-        const prev = predPoints[i - 1];
-        const curr = predPoints[i];
-        ctx.strokeStyle = curr.danger ? '#ef4444' : '#4ade80';
-        ctx.beginPath();
-        ctx.moveTo(prev.x, prev.y);
-        ctx.lineTo(curr.x, curr.y);
-        ctx.stroke();
+      if (predPoints.length > 1) {
+        let segStart = 0;
+        while (segStart < predPoints.length - 1) {
+          const isDanger = predPoints[segStart + 1].danger;
+          ctx.strokeStyle = isDanger ? '#ef4444' : '#4ade80';
+          ctx.beginPath();
+          ctx.moveTo(predPoints[segStart].x, predPoints[segStart].y);
+          let j = segStart + 1;
+          while (j < predPoints.length && predPoints[j].danger === isDanger) {
+            ctx.lineTo(predPoints[j].x, predPoints[j].y);
+            j++;
+          }
+          ctx.stroke();
+          segStart = j - 1;
+        }
       }
       ctx.setLineDash([]);
 
@@ -1254,25 +1287,9 @@ export const debrisGame: GameModule = {
         }
       }
 
-      // Glowing red conjunction alert diamond marker with additive bloom
+      // Conjunction alert diamond marker
       if (predictedImpactPoint) {
         const pulse = 9 + Math.sin(animTime * 12) * 2.8;
-        drawAdditiveGlow(
-          ctx,
-          predictedImpactPoint.x,
-          predictedImpactPoint.y,
-          30 + Math.sin(animTime * 12) * 6,
-          '239, 68, 68',
-          0.62
-        );
-        drawAdditiveGlow(
-          ctx,
-          predictedImpactPoint.x,
-          predictedImpactPoint.y,
-          12,
-          '254, 202, 202',
-          0.75
-        );
         ctx.strokeStyle = '#fb7185';
         ctx.lineWidth = 2.2;
         ctx.beginPath();
@@ -1361,56 +1378,32 @@ export const debrisGame: GameModule = {
         ctx.moveTo(rx2 - br, ry2); ctx.lineTo(rx2, ry2); ctx.lineTo(rx2, ry2 - br);
         ctx.stroke();
 
-        // Hypervelocity plasma/ionization tail streak with additive bloom
+        // Crisp plasma/ionization tail streak (flat lines, no gradients/lighter)
         const tailLen = 34 + (d.relSpeed - 8) * 8;
-        drawAdditiveGlow(ctx, dx, dy, 24, '244, 63, 94', 0.46 * fadeAlpha);
-        drawAdditiveGlow(ctx, dx + 6, dy, 13, '251, 146, 60', 0.48 * fadeAlpha);
-        drawAdditiveGlow(ctx, dx, dy, 9, '255, 241, 242', 0.82 * fadeAlpha);
-
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        // Outer luminous crimson plasma sheath
-        const outerWake = ctx.createLinearGradient(dx, dy, dx + tailLen * 1.25, dy);
-        outerWake.addColorStop(0, 'rgba(251, 113, 133, 0.72)');
-        outerWake.addColorStop(0.45, 'rgba(244, 63, 94, 0.34)');
-        outerWake.addColorStop(1, 'rgba(244, 63, 94, 0)');
-        ctx.strokeStyle = outerWake;
-        ctx.lineWidth = 7.5;
+        ctx.strokeStyle = 'rgba(251, 113, 133, 0.38)';
+        ctx.lineWidth = 5;
         ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(dx, dy);
-        ctx.lineTo(dx + tailLen * 1.25, dy);
-        ctx.stroke();
-
-        // Incandescent white-hot inner streak
-        const tGrad = ctx.createLinearGradient(dx, dy, dx + tailLen, dy);
-        tGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
-        tGrad.addColorStop(0.32, 'rgba(254, 202, 202, 0.85)');
-        tGrad.addColorStop(1, 'rgba(244, 63, 94, 0)');
-        ctx.strokeStyle = tGrad;
-        ctx.lineWidth = 2.6;
         ctx.beginPath();
         ctx.moveTo(dx, dy);
         ctx.lineTo(dx + tailLen, dy);
         ctx.stroke();
-        ctx.restore();
 
-        // Metallic tumbling debris core
-        ctx.save();
-        ctx.translate(dx, dy);
-        ctx.rotate(animTime * 4.5 + d.seed);
-        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = 'rgba(254, 202, 202, 0.8)';
+        ctx.lineWidth = 1.8;
         ctx.beginPath();
-        ctx.moveTo(-5.2, -2);
-        ctx.lineTo(2, -5.2);
-        ctx.lineTo(5.2, 1);
-        ctx.lineTo(-1, 4.6);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = '#fda4af';
-        ctx.lineWidth = 0.9;
+        ctx.moveTo(dx, dy);
+        ctx.lineTo(dx + tailLen * 0.72, dy);
         ctx.stroke();
-        ctx.restore();
+
+        // 3D Derelict Orbital Satellite / Debris Fragment Model
+        drawDebrisModel3D(ctx, {
+          x: dx,
+          y: dy,
+          radius: 10 + clamp(d.relSpeed - 7.5, 0, 4) * 1.4,
+          angle: animTime * 3.8 + d.seed,
+          seed: d.seed,
+          danger: true,
+        });
 
         // Live Conjunction Countdown & Velocity Label
         if (tRem > -0.2) {
@@ -1584,8 +1577,6 @@ export const debrisGame: GameModule = {
 
       particles.draw(ctx);
       ctx.restore(); // end radar clip
-      // Subtle military-glass radar display sheen & rim reflection
-      drawGlassViewport(ctx, rLeft, rTop, rW, rH, 14, 'rgba(56, 189, 248, 0.02)');
       ctx.restore(); // end screenShake
     };
 
@@ -1640,7 +1631,9 @@ export const debrisGame: GameModule = {
 
     const loop = (ts: number) => {
       if (destroyed) return;
-      const dt = clamp((ts - lastTs) / 1000, 0, 0.05);
+      const rawDtMs = ts - lastTs;
+      reportFrameDelta(rawDtMs);
+      const dt = clamp(rawDtMs / 1000, 0, 0.05);
       lastTs = ts;
       animTime += dt;
 

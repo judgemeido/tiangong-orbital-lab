@@ -10,14 +10,11 @@ import {
   StarfieldRenderer,
 } from '../../core/canvas-utils';
 import {
-  drawAdditiveGlow,
-  drawBackdropImage,
-  drawCinematicVignette,
-  drawGlassViewport,
-  drawSunLensFlare,
+  drawBakedBackdrop,
   drawTitaniumModule,
   getMLIPattern,
 } from '../../core/materials';
+import { drawModelSprite } from '../../core/model-sprites';
 import type {
   GameHostAPI,
   GameInstance,
@@ -642,24 +639,27 @@ export const solarGame: GameModule = {
       }
     };
 
-    // Layout helper keeping all visual zones cleanly inside safe play area (120 .. height-130)
+    // Layout helper keeping all visual zones cleanly inside safe play area (102..height-94 on compact)
     const getLayout = () => {
-      const safeTop = 128;
-      const safeBottom = Math.max(safeTop + 210, height - 134);
+      const compact = height <= 720;
+      const safeTop = compact ? 102 : 128;
+      const safeBottom = Math.max(safeTop + 195, height - (compact ? 94 : 134));
       const centerY = safeTop + (safeBottom - safeTop) * 0.48;
       const stationX = width * 0.49;
       const stationY = centerY + 6;
       const wingHalfSpan = clamp(Math.min(width * 0.145, (safeBottom - safeTop) * 0.34), 84, 134);
 
-      // Left Orbital Mini-Diagram (safely below top-left HUD ~162px and above bottom-left HUD)
-      const miniR = clamp(width * 0.046, 38, 52);
+      // Left Orbital Mini-Diagram (safely below top-left HUD and above bottom-left HUD)
+      const miniR = clamp(width * 0.046, 36, 52);
+      const miniMinY = compact ? 174 : 224;
       const miniX = clamp(miniR + 48, 86, 138);
-      const miniY = clamp(centerY - 12, 224, safeBottom - 95);
+      const miniY = clamp(centerY - 12, miniMinY, Math.max(miniMinY, safeBottom - 82));
 
-      // Right Power Bus Panel (safely below top-right telemetry ~158px and above bottom-right toasts)
-      const busW = clamp(width * 0.165, 148, 196);
+      // Right Power Bus Panel (safely below top-right telemetry and above bottom-right toasts)
+      const busW = clamp(width * 0.165, 146, 196);
       const busX = width - busW - 18;
-      const busTopY = clamp(centerY - 118, 174, Math.max(174, safeBottom - 265));
+      const busMinY = compact ? 132 : 174;
+      const busTopY = clamp(centerY - (compact ? 98 : 118), busMinY, Math.max(busMinY, safeBottom - (compact ? 225 : 265)));
 
       return { safeTop, safeBottom, centerY, stationX, stationY, wingHalfSpan, miniX, miniY, miniR, busX, busTopY, busW };
     };
@@ -1115,12 +1115,6 @@ export const solarGame: GameModule = {
 
       // Direction FROM station TOWARD sun (0° = straight UP -> canvas angle -PI/2)
       const toSunRad = ((sunDeg - 90) * Math.PI) / 180;
-      const sunDist = Math.max(width, height) * 0.56;
-      const sunX = sx + Math.cos(toSunRad) * sunDist;
-      const sunY = sy + Math.sin(toSunRad) * sunDist;
-
-      ctx.save();
-      // Parallel sunbeam shafts sweeping from sun across space station
       const rayDirX = -Math.cos(toSunRad);
       const rayDirY = -Math.sin(toSunRad);
       const perpX = -rayDirY;
@@ -1128,78 +1122,51 @@ export const solarGame: GameModule = {
 
       const isFlare = activeFlareState === 'active';
       const isWarn = activeFlareState === 'warning';
-      const pulse = 0.8 + 0.2 * Math.sin(simTime * (isFlare ? 14 : 3.2));
       const sunVis = clamp(1 - eclipseBlend * 0.85, 0.15, 1);
 
-      // Wide ambient golden / crimson-gold solar wash
-      ctx.globalCompositeOperation = 'lighter';
-      const wash = ctx.createRadialGradient(sunX, sunY, 20, sx, sy, Math.max(width, height) * 0.74);
-      if (isFlare) {
-        wash.addColorStop(0, `rgba(251, 113, 133, ${(0.42 * pulse).toFixed(3)})`);
-        wash.addColorStop(0.45, `rgba(245, 158, 11, ${(0.22 * pulse).toFixed(3)})`);
-        wash.addColorStop(1, 'rgba(15, 5, 10, 0)');
-      } else if (isWarn) {
-        wash.addColorStop(0, `rgba(251, 191, 36, ${(0.32 * pulse).toFixed(3)})`);
-        wash.addColorStop(0.5, 'rgba(249, 115, 22, 0.13)');
-        wash.addColorStop(1, 'rgba(10, 15, 30, 0)');
-      } else {
-        wash.addColorStop(0, `rgba(253, 224, 71, ${(0.24 * sunVis).toFixed(3)})`);
-        wash.addColorStop(0.5, `rgba(245, 158, 11, ${(0.08 * sunVis).toFixed(3)})`);
-        wash.addColorStop(1, 'rgba(10, 15, 30, 0)');
+      ctx.save();
+      // 3 crisp lightweight direction rays across station (no gradients / no lighter)
+      ctx.strokeStyle = isFlare
+        ? 'rgba(251, 113, 133, 0.14)'
+        : isWarn
+        ? 'rgba(251, 191, 36, 0.12)'
+        : `rgba(253, 224, 71, ${(0.09 * sunVis).toFixed(3)})`;
+      ctx.lineWidth = isFlare ? 7 : 9;
+      ctx.beginPath();
+      for (let i = -1; i <= 1; i++) {
+        const u = i * 95;
+        ctx.moveTo(sx - rayDirX * 320 + perpX * u, sy - rayDirY * 320 + perpY * u);
+        ctx.lineTo(sx + rayDirX * 300 + perpX * u, sy + rayDirY * 300 + perpY * u);
       }
-      ctx.fillStyle = wash;
-      ctx.fillRect(0, 0, width, height);
+      ctx.stroke();
 
-      // Parallel animated light beams
-      const beamCount = isFlare ? 9 : 6;
-      for (let i = 0; i < beamCount; i++) {
-        const u = ((i / (beamCount - 1)) - 0.5) * 320;
-        const bx1 = sx - rayDirX * 360 + perpX * u;
-        const by1 = sy - rayDirY * 360 + perpY * u;
-        const bx2 = sx + rayDirX * 340 + perpX * u;
-        const by2 = sy + rayDirY * 340 + perpY * u;
-
-        const g = ctx.createLinearGradient(bx1, by1, bx2, by2);
-        if (isFlare) {
-          g.addColorStop(0, 'rgba(251, 113, 133, 0)');
-          g.addColorStop(0.35, `rgba(244, 63, 94, ${(0.32 * pulse).toFixed(3)})`);
-          g.addColorStop(0.65, `rgba(251, 191, 36, ${(0.26 * pulse).toFixed(3)})`);
-          g.addColorStop(1, 'rgba(251, 113, 133, 0)');
-        } else {
-          g.addColorStop(0, 'rgba(254, 240, 138, 0)');
-          g.addColorStop(0.4, `rgba(253, 224, 71, ${(0.14 * sunVis).toFixed(3)})`);
-          g.addColorStop(1, 'rgba(245, 158, 11, 0)');
-        }
-        ctx.strokeStyle = g;
-        ctx.lineWidth = isFlare ? 11 : 16;
-        ctx.beginPath();
-        ctx.moveTo(bx1, by1);
-        ctx.lineTo(bx2, by2);
-        ctx.stroke();
-      }
-
-      // Cinematic Orbital Sun with Anamorphic Lens Flare & Intense Crimson-Gold CME Bloom
+      // Flat crisp Orbital Sun Orb + CME shockwave indicator
       const orbR = Math.min(width * 0.31, (height - 230) * 0.54);
       const orbX = sx + Math.cos(toSunRad) * orbR;
       const orbY = clamp(sy + Math.sin(toSunRad) * orbR, 68, height - 160);
 
+      ctx.fillStyle = isFlare
+        ? 'rgba(244, 63, 94, 0.24)'
+        : isWarn
+        ? 'rgba(245, 158, 11, 0.20)'
+        : `rgba(253, 224, 71, ${(0.18 * sunVis).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(orbX, orbY, isFlare ? 36 : isWarn ? 28 : 22, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = isFlare ? '#fda4af' : isWarn ? '#fde047' : '#fef08a';
+      ctx.beginPath();
+      ctx.arc(orbX, orbY, isFlare ? 13 : 10, 0, Math.PI * 2);
+      ctx.fill();
+
       if (isFlare) {
-        drawAdditiveGlow(ctx, orbX, orbY, 148 * pulse, '244, 63, 94', 0.62 * pulse);
-        drawAdditiveGlow(ctx, orbX, orbY, 82 * pulse, '251, 146, 60', 0.75 * pulse);
-        drawSunLensFlare(ctx, orbX, orbY, 30, 1.38 * pulse);
-        // Expanding CME coronal shockwave ring
-        const shockR = 36 + ((simTime * 125) % 105);
-        const shockA = clamp(1 - (shockR - 36) / 105, 0, 1) * 0.55;
+        const shockR = 32 + ((simTime * 125) % 96);
+        const shockA = clamp(1 - (shockR - 32) / 96, 0, 1) * 0.55;
         ctx.strokeStyle = `rgba(251, 113, 133, ${shockA.toFixed(3)})`;
-        ctx.lineWidth = 2.4;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(orbX, orbY, shockR, 0, Math.PI * 2);
         ctx.stroke();
-      } else if (isWarn) {
-        drawAdditiveGlow(ctx, orbX, orbY, 92 * pulse, '245, 158, 11', 0.48 * pulse);
-        drawSunLensFlare(ctx, orbX, orbY, 24, 1.12 * pulse);
-      } else {
-        drawSunLensFlare(ctx, orbX, orbY, 21, 0.96 * sunVis);
       }
 
       ctx.restore();
@@ -1279,18 +1246,20 @@ export const solarGame: GameModule = {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Earth disc (daylit left, night right)
-      const eg = ctx.createLinearGradient(cx - earthR, cy, cx + earthR, cy);
-      eg.addColorStop(0, '#38bdf8');
-      eg.addColorStop(0.5, '#0369a1');
-      eg.addColorStop(0.65, '#082f49');
-      eg.addColorStop(1, '#020617');
-      ctx.fillStyle = eg;
+      // Earth disc (daylit left, night right, zero gradient)
+      ctx.fillStyle = '#082f49';
       ctx.beginPath();
       ctx.arc(cx, cy, earthR, 0, Math.PI * 2);
       ctx.fill();
+      ctx.fillStyle = '#0284c7';
+      ctx.beginPath();
+      ctx.arc(cx, cy, earthR, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.closePath();
+      ctx.fill();
       ctx.strokeStyle = 'rgba(125, 211, 252, 0.6)';
       ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, earthR, 0, Math.PI * 2);
       ctx.stroke();
 
       // Station dot on orbit (canvas Y is down so invert sin for CCW top sweep)
@@ -1400,13 +1369,6 @@ export const solarGame: GameModule = {
       ctx.fillRect(-gap - panelLen, -panelThick / 2 - 3, panelLen, 3.2);
       ctx.fillRect(gap, -panelThick / 2 - 3, panelLen, 3.2);
 
-      // Volumetric photovoltaic shimmer glow along wing roots when actively generating power
-      if (isSunlit && currentGenKw > 25 && !(activeFlareState === 'active' && !flareSafeFeathered)) {
-        const gAlpha = clamp(currentGenKw / cfg.pMaxKw, 0.2, 1) * 0.34;
-        drawAdditiveGlow(ctx, -gap - panelLen * 0.5, -panelThick * 0.45, panelLen * 0.42, '253, 224, 71', shadowOccluded ? gAlpha * 0.3 : gAlpha);
-        drawAdditiveGlow(ctx, gap + panelLen * 0.5, -panelThick * 0.45, panelLen * 0.42, '253, 224, 71', gAlpha);
-      }
-
       // Dark slate backing edge on underside (+y) so sun-facing side is unmistakable
       ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
       ctx.fillRect(-gap - panelLen, panelThick / 2, panelLen, 3);
@@ -1423,7 +1385,6 @@ export const solarGame: GameModule = {
 
       // Protective cyan aerodynamic/plasma slipstream shield when safely feathered during flare!
       if (activeFlareState === 'active' && flareSafeFeathered) {
-        drawAdditiveGlow(ctx, 0, 0, wingHalfSpan * 0.72, '56, 189, 248', 0.24);
         ctx.strokeStyle = 'rgba(56, 189, 248, 0.88)';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -1432,7 +1393,6 @@ export const solarGame: GameModule = {
       }
 
       // Small normal indicator chevron at wing center
-      drawAdditiveGlow(ctx, 0, -panelThick / 2 - 9, 12, '56, 189, 248', 0.42);
       ctx.fillStyle = '#38bdf8';
       ctx.beginPath();
       ctx.moveTo(0, -panelThick / 2 - 14);
@@ -1443,38 +1403,27 @@ export const solarGame: GameModule = {
 
       ctx.restore();
 
-      // ---- Stationary Central Space Station Core (Tianhe / Wentian / Mengtian hub) ----
-      // Vertical pressurized titanium core hull with crinkled gold MLI thermal bands
-      drawTitaniumModule(ctx, -18, -38, 36, 76, {
-        vertical: true,
-        radius: 9,
-        mliBands: [0.1, 0.78],
-        rivets: true,
-        rimGlow: isSunlit ? 'rgba(241, 248, 255, 0.86)' : 'rgba(100, 150, 210, 0.52)',
+      // ---- Stationary Central Space Station Core (3D Tianhe / Node Hub) ----
+      const usedCoreSprite = drawModelSprite(ctx, 'station-core-top', -20, -68, 40, 138, {
+        brightness: clamp(1 - eclipseBlend * 0.52, 0.42, 1),
       });
-      if (eclipseBlend > 0.04) {
-        ctx.save();
-        ctx.fillStyle = `rgba(4, 10, 26, ${(eclipseBlend * 0.48).toFixed(3)})`;
-        ctx.beginPath();
-        ctx.roundRect(-18, -38, 36, 76, 9);
-        ctx.fill();
-        ctx.restore();
+      if (!usedCoreSprite) {
+        drawTitaniumModule(ctx, -18, -38, 36, 76, {
+          vertical: true,
+          radius: 9,
+          mliBands: [0.1, 0.78],
+          rivets: true,
+          rimGlow: isSunlit ? 'rgba(241, 248, 255, 0.86)' : 'rgba(100, 150, 210, 0.52)',
+        });
+        if (eclipseBlend > 0.04) {
+          ctx.save();
+          ctx.fillStyle = `rgba(4, 10, 26, ${(eclipseBlend * 0.48).toFixed(3)})`;
+          ctx.beginPath();
+          ctx.roundRect(-18, -38, 36, 76, 9);
+          ctx.fill();
+          ctx.restore();
+        }
       }
-
-      // Volumetric hub energy aura (gold sunlit generation / cyan eclipse standby / crimson CME danger)
-      const hubRgb =
-        activeFlareState === 'active' && !flareSafeFeathered
-          ? '239, 68, 68'
-          : currentGenKw > 5
-          ? '251, 191, 36'
-          : '56, 189, 248';
-      const hubGlowAlpha =
-        activeFlareState === 'active' && !flareSafeFeathered
-          ? 0.65
-          : currentGenKw > 5
-          ? 0.25 + clamp(currentGenKw / cfg.pMaxKw, 0, 1) * 0.35
-          : 0.22;
-      drawAdditiveGlow(ctx, 0, 0, 42, hubRgb, hubGlowAlpha);
 
       // Central alpha-gimbal rotary ring hub with crinkled gold MLI actuator ring
       const mli = getMLIPattern(ctx);
@@ -1483,22 +1432,12 @@ export const solarGame: GameModule = {
       ctx.arc(0, 0, 23, 0, Math.PI * 2);
       ctx.fillStyle = mli ?? '#d97706';
       ctx.fill();
-      // Cylindrical bevel over gold MLI collar
-      const ringBevel = ctx.createLinearGradient(-23, -23, 23, 23);
-      ringBevel.addColorStop(0, 'rgba(255, 252, 225, 0.35)');
-      ringBevel.addColorStop(0.5, 'rgba(255, 255, 255, 0.05)');
-      ringBevel.addColorStop(1, 'rgba(12, 8, 2, 0.62)');
-      ctx.fillStyle = ringBevel;
-      ctx.fill();
       ctx.strokeStyle = isSunlit ? '#fde68a' : '#7dd3fc';
       ctx.lineWidth = 1.6;
       ctx.stroke();
 
-      // Inner obsidian telemetry housing
-      const coreHub = ctx.createRadialGradient(-5, -5, 2, 0, 0, 18);
-      coreHub.addColorStop(0, '#1e324d');
-      coreHub.addColorStop(1, '#081122');
-      ctx.fillStyle = coreHub;
+      // Inner obsidian telemetry housing (flat fill, no radial gradient)
+      ctx.fillStyle = '#0c182c';
       ctx.beginPath();
       ctx.arc(0, 0, 18.2, 0, Math.PI * 2);
       ctx.fill();
@@ -1507,19 +1446,23 @@ export const solarGame: GameModule = {
       ctx.stroke();
       ctx.restore();
 
-      // Recessed optical cabin glass viewports with additive glow (dim/red if battery critical)
+      // Recessed optical cabin glass viewports (dim/red if battery critical)
       const battPct = (batteryKws / cfg.batteryCapKws) * 100;
       const winCrit = battPct <= 20;
       const winPulse = Math.sin(simTime * 10) > 0;
-      const winRgb = winCrit ? '239, 68, 68' : '56, 189, 248';
       const winTint = winCrit
         ? winPulse
-          ? 'rgba(239, 68, 68, 0.72)'
-          : 'rgba(127, 29, 29, 0.45)'
-        : 'rgba(56, 189, 248, 0.56)';
+          ? 'rgba(239, 68, 68, 0.82)'
+          : 'rgba(127, 29, 29, 0.52)'
+        : 'rgba(56, 189, 248, 0.68)';
       for (const wy of [-29, 29]) {
-        drawAdditiveGlow(ctx, 0, wy, 10, winRgb, winCrit ? (winPulse ? 0.65 : 0.2) : 0.42);
-        drawGlassViewport(ctx, -4.5, wy - 4, 9, 8, 4, winTint);
+        ctx.fillStyle = winTint;
+        ctx.beginPath();
+        ctx.arc(0, wy, 4.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(186, 230, 253, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
       }
 
       // Central generator power badge
@@ -1663,10 +1606,9 @@ export const solarGame: GameModule = {
           const u = 1 - t;
           const px = u * u * u * x1 + 3 * u * u * t * mx + 3 * u * t * t * mx + t * t * t * x2;
           const py = u * u * u * y1 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y2;
-          drawAdditiveGlow(ctx, px, py, 14, glowRgb, 0.72);
-          ctx.fillStyle = '#ffffff';
+          ctx.fillStyle = color;
           ctx.beginPath();
-          ctx.arc(px, py, 2.6, 0, Math.PI * 2);
+          ctx.arc(px, py, 3.2, 0, Math.PI * 2);
           ctx.fill();
         }
       };
@@ -1739,14 +1681,13 @@ export const solarGame: GameModule = {
       ctx.lineTo(trunkX, trunkBotY);
       ctx.stroke();
 
-      // Animated additive power packets pulsing down the 100V feeder trunk
+      // Animated power packets pulsing down the 100V feeder trunk
       for (let i = 0; i < 3; i++) {
         const ft = (packetPhase * 0.85 + i / 3) % 1;
         const py = lerp(trunkTopY, trunkBotY, ft);
-        drawAdditiveGlow(ctx, trunkX, py, 9, '56, 189, 248', 0.6);
-        ctx.fillStyle = '#e0f2fe';
+        ctx.fillStyle = '#38bdf8';
         ctx.beginPath();
-        ctx.arc(trunkX, py, 1.9, 0, Math.PI * 2);
+        ctx.arc(trunkX, py, 2.5, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -1783,10 +1724,7 @@ export const solarGame: GameModule = {
         ctx.lineWidth = b.on ? 1.5 : 1;
         ctx.stroke();
 
-        // Status indicator LED with additive optical glow when bus is active
-        if (b.on) {
-          drawAdditiveGlow(ctx, busX + 12, b.y + 15, 13, b.rgb, 0.65);
-        }
+        // Status indicator LED
         ctx.fillStyle = b.on ? '#ffffff' : '#475569';
         ctx.beginPath();
         ctx.arc(busX + 12, b.y + 15, b.on ? 3.4 : 3.2, 0, Math.PI * 2);
@@ -1855,52 +1793,28 @@ export const solarGame: GameModule = {
       const cfg = LEVELS[levelIndex];
       const layout = getLayout();
 
-      // 1. Deep space starfield + smooth orbital crossfade between sunlit LEO Earth & night aurora/city-lights Earth
-      stars.draw(ctx, width, height, simTime, -simTime * 4.5, 0);
+      // 1. Baked Opaque Orbital Backdrop (sunlit LEO vs night Earth; 1 integer drawImage)
       const orbitFrac = (simTime % cfg.orbitDuration) / cfg.orbitDuration;
       const horizonSunPhase = isSunlit
         ? lerp(-0.35, 1.35, orbitFrac / cfg.sunlitFraction)
         : lerp(1.75, 3.05, (orbitFrac - cfg.sunlitFraction) / (1 - cfg.sunlitFraction));
-
-      const driftX = Math.sin(simTime * 0.06) * 8;
-      const driftY = Math.cos(simTime * 0.05) * 3;
-      const dayAlpha = clamp(1 - eclipseBlend, 0, 1);
-      const nightAlpha = clamp(eclipseBlend, 0, 1);
-
-      const dayPainted =
-        dayAlpha > 0.01
-          ? drawBackdropImage(ctx, 'leo-earth', width, height, {
-              alpha: dayAlpha * 0.94,
-              offsetX: driftX,
-              offsetY: driftY,
-              darken: 0.22,
-            })
-          : false;
-      const nightPainted =
-        nightAlpha > 0.01
-          ? drawBackdropImage(ctx, 'earth-night', width, height, {
-              alpha: nightAlpha * 0.96,
-              offsetX: driftX,
-              offsetY: driftY,
-              darken: 0.14,
-            })
-          : false;
-
-      if (dayPainted || nightPainted) {
-        // Subtle sunlit limb warmth -> terminator sunset glow -> night emerald aurora & citylight glow
-        if (dayAlpha > 0.05) {
-          drawAdditiveGlow(ctx, width * 0.18 + driftX, height * 0.78, Math.min(width, height) * 0.34, '255, 195, 110', 0.12 * dayAlpha);
-        }
-        if (nightAlpha > 0.05) {
-          drawAdditiveGlow(ctx, width * 0.64 + driftX, height * 0.72, Math.min(width, height) * 0.36, '52, 211, 153', 0.14 * nightAlpha);
-          drawAdditiveGlow(ctx, width * 0.28 + driftX, height * 0.84, Math.min(width, height) * 0.28, '251, 191, 36', 0.11 * nightAlpha);
-        }
+      const useNightBackdrop = eclipseBlend >= 0.5;
+      const painted = drawBakedBackdrop(
+        ctx,
+        useNightBackdrop ? 'earth-night' : 'leo-earth',
+        width,
+        height,
+        useNightBackdrop ? 0.2 : 0.24,
+        0.34
+      );
+      if (painted) {
         if (eclipseBlend > 0.04 && eclipseBlend < 0.96) {
-          const termPeak = Math.sin(eclipseBlend * Math.PI);
-          drawAdditiveGlow(ctx, width * 0.5, height * 0.76, Math.min(width, height) * 0.45, '249, 115, 22', termPeak * 0.22);
+          const termAlpha = Math.sin(eclipseBlend * Math.PI) * 0.14;
+          ctx.fillStyle = `rgba(249, 115, 22, ${termAlpha.toFixed(3)})`;
+          ctx.fillRect(0, 0, width, height);
         }
-        drawCinematicVignette(ctx, width, height, 0.36);
       } else {
+        stars.draw(ctx, width, height, simTime, -simTime * 4.5, 0);
         drawEarthHorizon(ctx, width, height, simTime, {
           yRatio: 1.76,
           radiusScale: 1.15,

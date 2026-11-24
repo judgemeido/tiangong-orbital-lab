@@ -1,3 +1,4 @@
+import { drawFeitianAstronaut3D } from '../../core/aerospace-models';
 import {
   clamp,
   drawVectorArrow,
@@ -7,11 +8,8 @@ import {
   StarfieldRenderer,
 } from '../../core/canvas-utils';
 import {
-  drawAdditiveGlow,
-  drawBackdropImage,
-  drawCinematicVignette,
-  drawGlassViewport,
-  getTitaniumPattern,
+  drawBakedBackdrop,
+  getMLIPattern,
 } from '../../core/materials';
 import type {
   GameHostAPI,
@@ -1122,53 +1120,31 @@ export const eclssGame: GameModule = {
       exercising: boolean,
       phase: number
     ) => {
-      ctx.save();
       const bob = Math.sin(animTime * (exercising ? 9.5 : 2.1) + phase) * (exercising ? 3.2 : 1.8);
-      ctx.translate(x, y + bob);
-      ctx.scale(scale, scale);
-
-      // Torso suit
-      ctx.fillStyle = '#e2e8f0';
-      roundRectPath(ctx, -6, -2, 12, 14, 4);
-      ctx.fill();
-      ctx.fillStyle = exercising ? '#f59e0b' : '#38bdf8';
-      ctx.fillRect(-4, 2, 8, 3);
-
-      // Helmet
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.arc(0, -8, 6.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#0ea5e9';
-      ctx.beginPath();
-      ctx.arc(1.2, -8, 4.1, -Math.PI * 0.45, Math.PI * 0.45);
-      ctx.fill();
-
-      // Arms / legs animated during orbital workout
-      const swing = exercising ? Math.sin(animTime * 11 + phase) * 5.5 : Math.sin(animTime * 2 + phase) * 1.2;
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 2.6;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(-6, 1);
-      ctx.lineTo(-10, 5 + swing * 0.6);
-      ctx.moveTo(6, 1);
-      ctx.lineTo(10, 5 - swing * 0.6);
-      ctx.moveTo(-3, 12);
-      ctx.lineTo(-4 - swing * 0.5, 19);
-      ctx.moveTo(3, 12);
-      ctx.lineTo(4 + swing * 0.5, 19);
-      ctx.stroke();
+      drawFeitianAstronaut3D(ctx, {
+        x,
+        y: y + bob,
+        scale: scale * 0.78,
+        facing: 1,
+        tilt: exercising ? Math.sin(animTime * 8 + phase) * 0.09 : Math.sin(animTime * 1.5 + phase) * 0.04,
+        simTime: animTime,
+        thermalMode: exercising ? 'heat' : 'balance',
+        suitTemp: exercising ? 25 : 21,
+        exercising,
+        posePhase: phase,
+      });
 
       if (exercising) {
-        // Sweat / exertion arc
-        ctx.strokeStyle = 'rgba(251, 191, 36, 0.78)';
+        ctx.save();
+        ctx.translate(x, y + bob);
+        ctx.scale(scale, scale);
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.82)';
         ctx.lineWidth = 1.4;
         ctx.beginPath();
-        ctx.arc(0, -14, 4 + ((animTime * 12 + phase) % 5), Math.PI * 1.15, Math.PI * 1.85);
+        ctx.arc(0, -18, 5 + ((animTime * 12 + phase) % 5), Math.PI * 1.15, Math.PI * 1.85);
         ctx.stroke();
+        ctx.restore();
       }
-      ctx.restore();
     };
 
     const drawGlassPipe = (
@@ -1197,13 +1173,12 @@ export const eclssGame: GameModule = {
       ctx.bezierCurveTo(p1[0], p1[1], p2[0], p2[1], p3[0], p3[1]);
       ctx.stroke();
 
-      // Luminous fluid core proportional to flow rate
+      // Fluid core proportional to flow rate (flat source-over stroke)
       if (activeRatio > 0.04) {
         ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
         ctx.strokeStyle = tint;
-        ctx.globalAlpha = 0.22 + 0.42 * clamp(activeRatio, 0, 1);
-        ctx.lineWidth = 4.6;
+        ctx.globalAlpha = 0.42 + 0.45 * clamp(activeRatio, 0, 1);
+        ctx.lineWidth = 4.2;
         ctx.beginPath();
         ctx.moveTo(p0[0], p0[1]);
         ctx.bezierCurveTo(p1[0], p1[1], p2[0], p2[1], p3[0], p3[1]);
@@ -1237,34 +1212,12 @@ export const eclssGame: GameModule = {
       const isSelected = selectedUnit === u.id;
 
       ctx.save();
-      // Machined titanium card housing with subtle drop shadow
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.48)';
-      ctx.shadowBlur = 12;
-      ctx.shadowOffsetY = 4;
-      const grad = ctx.createLinearGradient(x, y, x, y + h);
-      grad.addColorStop(0, 'rgba(20, 36, 64, 0.94)');
-      grad.addColorStop(0.5, 'rgba(12, 24, 46, 0.96)');
-      grad.addColorStop(1, 'rgba(7, 15, 30, 0.97)');
-      ctx.fillStyle = grad;
+      // Machined titanium card housing (flat fill, zero shadowBlur/clip/gradient)
+      ctx.fillStyle = 'rgba(11, 22, 42, 0.96)';
       roundRectPath(ctx, x, y, w, h, 10);
       ctx.fill();
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetY = 0;
-
-      // Brushed titanium micro-grain clipped inside card
-      ctx.save();
-      roundRectPath(ctx, x, y, w, h, 10);
-      ctx.clip();
-      const tiPattern = getTitaniumPattern(ctx);
-      if (tiPattern) {
-        ctx.fillStyle = tiPattern;
-        ctx.fillRect(x, y, w, h);
-      }
-      // Subtle top anodized metallic highlight lip
       ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-      ctx.fillRect(x, y, w, 2);
-      ctx.restore();
+      ctx.fillRect(x + 10, y + 1, w - 20, 1.5);
 
       // Active glow border
       ctx.strokeStyle =
@@ -1294,10 +1247,7 @@ export const eclssGame: GameModule = {
       ctx.fill();
 
       if (u.id === 'ogs') {
-        // Electrolysis electrodes + rising bubbles + luminous cell glow
-        if (frac > 0) {
-          drawAdditiveGlow(ctx, chX + chW * 0.5, chY + chH * 0.5, 18, '74, 222, 128', 0.22 + frac * 0.26);
-        }
+        // Electrolysis electrodes + rising bubbles
         ctx.fillStyle = '#94a3b8';
         ctx.fillRect(chX + 6, chY + 6, 3, chH - 12);
         ctx.fillRect(chX + chW - 9, chY + 6, 3, chH - 12);
@@ -1315,11 +1265,6 @@ export const eclssGame: GameModule = {
       } else if (u.id === 'cdra') {
         // Zeolite molecular sieve bed fill (shows saturation)
         const fillH = clamp(sieveSat, 0.08, 1) * (chH - 4);
-        if (sieveRegenTimer > 0) {
-          drawAdditiveGlow(ctx, chX + chW * 0.5, chY + chH * 0.5, 18, '56, 189, 248', 0.45);
-        } else if (sieveSat >= 0.72) {
-          drawAdditiveGlow(ctx, chX + chW * 0.5, chY + chH * 0.5, 16, '239, 68, 68', 0.36);
-        }
         ctx.fillStyle =
           sieveRegenTimer > 0
             ? '#38bdf8'
@@ -1337,18 +1282,10 @@ export const eclssGame: GameModule = {
           ctx.stroke();
         }
       } else if (u.id === 'sabatier') {
-        // Exothermic catalytic reactor core with vibrant multi-pass additive bloom
+        // Exothermic catalytic reactor core
         const cxm = chX + chW * 0.5;
         const cym = chY + chH * 0.5;
         const heatRatio = clamp((sabTemp - 310) / 230, 0, 1);
-        const coreRgb =
-          sabTripTimer > 0
-            ? '239, 68, 68'
-            : heatRatio > 0.7
-              ? '249, 115, 22'
-              : frac > 0
-                ? '168, 85, 247'
-                : '71, 85, 105';
         const coreCol =
           sabTripTimer > 0
             ? '#ef4444'
@@ -1358,13 +1295,9 @@ export const eclssGame: GameModule = {
                 ? '#c084fc'
                 : '#334155';
         const pulse = Math.sin(animTime * 7) * 1.4;
-        if (frac > 0 || sabTripTimer > 0) {
-          drawAdditiveGlow(ctx, cxm, cym, 22 + frac * 10 + pulse, coreRgb, 0.42 + frac * 0.36);
-          drawAdditiveGlow(ctx, cxm, cym, 10 + frac * 4, '245, 208, 254', 0.48 + frac * 0.32);
-        }
         const rad = 5 + frac * 5 + pulse * 0.7;
         ctx.fillStyle = coreCol;
-        ctx.globalAlpha = 0.36 + frac * 0.55;
+        ctx.globalAlpha = 0.45 + frac * 0.5;
         ctx.beginPath();
         ctx.arc(cxm, cym, rad, 0, Math.PI * 2);
         ctx.fill();
@@ -1377,9 +1310,6 @@ export const eclssGame: GameModule = {
         // WRS rotary distillation drum
         const cxm = chX + chW * 0.5;
         const cym = chY + chH * 0.5;
-        if (frac > 0) {
-          drawAdditiveGlow(ctx, cxm, cym, 16, '56, 189, 248', 0.24 + frac * 0.26);
-        }
         ctx.strokeStyle = '#38bdf8';
         ctx.lineWidth = 2;
         const rot = animTime * (frac * 5.5 + 0.3);
@@ -1392,8 +1322,16 @@ export const eclssGame: GameModule = {
         ctx.fill();
       }
 
-      // Recessed optical glazing over reactor micro-chamber
-      drawGlassViewport(ctx, chX, chY, chW, chH, 5, 'rgba(56, 189, 248, 0.05)');
+      // Crisp flange frame over reactor micro-chamber
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.35)';
+      ctx.lineWidth = 1;
+      roundRectPath(ctx, chX, chY, chW, chH, 5);
+      ctx.stroke();
+      const mli = getMLIPattern(ctx);
+      if (u.id === 'sabatier' && mli) {
+        ctx.fillStyle = mli;
+        ctx.fillRect(chX + 3, chY - 3, chW - 6, 3);
+      }
 
       // Header text
       ctx.fillStyle = '#edf4ff';
@@ -1499,69 +1437,45 @@ export const eclssGame: GameModule = {
 
     const render = () => {
       const { width: w, height: h } = canvasHandle.getSize();
-      ctx.clearRect(0, 0, w, h);
 
-      // Genuine brushed titanium & anodized graphite Tiangong lab bulkhead backdrop
-      starfield.draw(ctx, w, h, animTime, -animTime * 2, 0);
-      drawBackdropImage(ctx, 'lab-interior', w, h, { alpha: 0.94, darken: 0.24 });
-      drawCinematicVignette(ctx, w, h, 0.34);
+      // Baked Opaque Tiangong lab bulkhead backdrop (1 integer drawImage when cached)
+      if (!drawBakedBackdrop(ctx, 'lab-interior', w, h, 0.24, 0.34)) {
+        starfield.draw(ctx, w, h, animTime, -animTime * 2, 0);
+      }
 
-      // Safe Play Area calculation (clear of top-left/right HUD & bottom tactile deck even at 1280x720)
-      const safeTop = Math.max(142, h * 0.195);
-      const safeBot = Math.min(h - 118, h * 0.84);
+      // Safe Play Area calculation (clear of top-left/right HUD & bottom tactile deck even at 1366x768)
+      const compact = h <= 720;
+      const safeTop = compact ? Math.max(104, h * 0.16) : Math.max(142, h * 0.195);
+      const safeBot = Math.min(h - (compact ? 82 : 118), h * 0.87);
       const safeH = Math.max(245, safeBot - safeTop);
       const cx = w * 0.5;
       const panelW = clamp(w * 0.86, 580, 960);
       const panelX = cx - panelW * 0.5;
 
-      // Cutaway Core Module Hull Container with brushed titanium bezel & recessed bolts
+      // Cutaway Core Module Hull Container (flat fill, no gradient/clip)
       ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.58)';
-      ctx.shadowBlur = 24;
-      ctx.shadowOffsetY = 8;
-      const hullGrad = ctx.createLinearGradient(panelX, safeTop, panelX, safeBot);
-      hullGrad.addColorStop(0, 'rgba(18, 32, 56, 0.88)');
-      hullGrad.addColorStop(0.5, 'rgba(9, 19, 38, 0.91)');
-      hullGrad.addColorStop(1, 'rgba(13, 24, 46, 0.9)');
-      ctx.fillStyle = hullGrad;
+      ctx.fillStyle = 'rgba(10, 20, 40, 0.92)';
       roundRectPath(ctx, panelX, safeTop, panelW, safeH, 16);
       ctx.fill();
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetY = 0;
+      ctx.strokeStyle = 'rgba(2, 6, 16, 0.65)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
 
-      // Clipped brushed titanium micro-grain + recessed structural bulkhead ribs
-      ctx.save();
-      roundRectPath(ctx, panelX, safeTop, panelW, safeH, 16);
-      ctx.clip();
-      const hullGrain = getTitaniumPattern(ctx);
-      if (hullGrain) {
-        ctx.fillStyle = hullGrain;
-        ctx.fillRect(panelX, safeTop, panelW, safeH);
-      }
-      // Subtle metallic top specular chamfer
-      const rimSheen = ctx.createLinearGradient(panelX, safeTop, panelX, safeTop + 26);
-      rimSheen.addColorStop(0, 'rgba(226, 240, 255, 0.14)');
-      rimSheen.addColorStop(1, 'rgba(226, 240, 255, 0)');
-      ctx.fillStyle = rimSheen;
-      ctx.fillRect(panelX, safeTop, panelW, 26);
-
-      // Subtle engineering schematic grid inside hull
+      // Engineering schematic grid inside hull
       ctx.strokeStyle = 'rgba(125, 185, 255, 0.055)';
       ctx.lineWidth = 1;
       for (let gx = panelX + 36; gx < panelX + panelW - 10; gx += 36) {
         ctx.beginPath();
-        ctx.moveTo(gx, safeTop + 6);
-        ctx.lineTo(gx, safeBot - 6);
+        ctx.moveTo(gx, safeTop + 10);
+        ctx.lineTo(gx, safeBot - 10);
         ctx.stroke();
       }
       for (let gy = safeTop + 32; gy < safeBot - 10; gy += 32) {
         ctx.beginPath();
-        ctx.moveTo(panelX + 6, gy);
-        ctx.lineTo(panelX + panelW - 6, gy);
+        ctx.moveTo(panelX + 10, gy);
+        ctx.lineTo(panelX + panelW - 10, gy);
         ctx.stroke();
       }
-      ctx.restore();
 
       // Inner recessed bulkhead channel line
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.09)';
@@ -1578,7 +1492,7 @@ export const eclssGame: GameModule = {
       roundRectPath(ctx, panelX, safeTop, panelW, safeH, 16);
       ctx.stroke();
 
-      // Precision metallic corner & flange bolts
+      // Precision metallic corner & flange bolts (flat circles, zero radial gradients)
       const boltCoords: [number, number][] = [
         [panelX + 13, safeTop + 13],
         [panelX + panelW - 13, safeTop + 13],
@@ -1588,11 +1502,7 @@ export const eclssGame: GameModule = {
         [panelX + panelW - 13, safeTop + safeH * 0.5],
       ];
       for (const [bx, by] of boltCoords) {
-        const bGrad = ctx.createRadialGradient(bx - 1.2, by - 1.2, 0.6, bx, by, 4.2);
-        bGrad.addColorStop(0, '#e2e8f0');
-        bGrad.addColorStop(0.55, '#64748b');
-        bGrad.addColorStop(1, '#1e293b');
-        ctx.fillStyle = bGrad;
+        ctx.fillStyle = '#64748b';
         ctx.beginPath();
         ctx.arc(bx, by, 4, 0, Math.PI * 2);
         ctx.fill();
@@ -1714,21 +1624,18 @@ export const eclssGame: GameModule = {
       drawGlassPipe(...pipeCurves.hab2wrs, '#60a5fa', 0.55);
       drawGlassPipe(...pipeCurves.wrs2w, '#38bdf8', pWrs);
 
-      // Draw animated fluid/gas packets flowing through glass pipes with vibrant additive bloom
+      // Draw animated fluid/gas packets flowing through glass pipes (crisp flat dots)
       for (const pk of packets) {
         const pts = pipeCurves[pk.pipe];
         const [px, py] = evalCubic(pts[0], pts[1], pts[2], pts[3], pk.t);
-        drawAdditiveGlow(ctx, px, py, pk.radius * 3.4, pk.rgb, 0.62);
-        ctx.save();
         ctx.fillStyle = pk.color;
         ctx.beginPath();
-        ctx.arc(px, py, pk.radius, 0, Math.PI * 2);
+        ctx.arc(px, py, pk.radius + 0.6, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
         ctx.beginPath();
         ctx.arc(px, py, pk.radius * 0.46, 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
       }
 
       // --- Crew Habitat Bay (Top Center) ---
@@ -1745,12 +1652,6 @@ export const eclssGame: GameModule = {
           : habStatus === 'caution'
             ? 'rgba(245, 158, 11, 0.18)'
             : 'rgba(34, 197, 94, 0.14)';
-      const habRgb =
-        habStatus === 'critical'
-          ? '239, 68, 68'
-          : habStatus === 'caution'
-            ? '245, 158, 11'
-            : '34, 197, 94';
       const habBorder =
         habStatus === 'critical'
           ? '#ef4444'
@@ -1758,18 +1659,14 @@ export const eclssGame: GameModule = {
             ? '#f59e0b'
             : '#22c55e';
 
-      const habBg = ctx.createLinearGradient(habX, habY, habX, habY + habH);
-      habBg.addColorStop(0, 'rgba(13, 30, 56, 0.95)');
-      habBg.addColorStop(1, 'rgba(8, 20, 38, 0.96)');
-      ctx.fillStyle = habBg;
+      ctx.fillStyle = 'rgba(10, 24, 46, 0.95)';
       roundRectPath(ctx, habX, habY, habW, habH, 14);
       ctx.fill();
 
-      // Atmospheric interior tint + soft additive ambience
+      // Atmospheric interior tint
       ctx.fillStyle = habGlow;
       roundRectPath(ctx, habX + 3, habY + 3, habW - 6, habH - 6, 11);
       ctx.fill();
-      drawAdditiveGlow(ctx, habX + habW * 0.5, habY + habH * 0.5, habW * 0.42, habRgb, 0.16);
 
       // Habitat header
       ctx.fillStyle = '#edf4ff';
@@ -1817,9 +1714,6 @@ export const eclssGame: GameModule = {
       ctx.fillStyle = getCo2Status() === 'nominal' ? '#7dd3fc' : getCo2Status() === 'caution' ? '#fbbf24' : '#fca5a5';
       ctx.fillText(`CO₂ ${co2.toFixed(2)} kPa`, habX + habW - 18, habY + habH - 9);
 
-      // Recessed optical viewport glazing over Crew Habitat Bay
-      drawGlassViewport(ctx, habX + 3, habY + 3, habW - 6, habH - 6, 11, 'rgba(56, 189, 248, 0.04)');
-
       ctx.strokeStyle = habBorder;
       ctx.lineWidth = 1.8;
       roundRectPath(ctx, habX, habY, habW, habH, 14);
@@ -1832,26 +1726,13 @@ export const eclssGame: GameModule = {
       roundRectPath(ctx, tankX, tankY, tankW, tankH, 14);
       ctx.fill();
 
-      // Soft backlit pressurized glow
-      drawAdditiveGlow(
-        ctx,
-        cx,
-        tankY + tankH * 0.62,
-        tankW * 0.68,
-        water < 20 ? '239, 68, 68' : '56, 189, 248',
-        0.24
-      );
-
-      // Clipped sloshing cyan water fill
+      // Sloshing cyan water fill
       ctx.save();
       roundRectPath(ctx, tankX + 4, tankY + 4, tankW - 8, tankH - 8, 10);
       ctx.clip();
       const fillRatio = clamp(water / 100, 0, 1);
       const waterTopY = tankY + tankH - 4 - fillRatio * (tankH - 12);
-      const wGrad = ctx.createLinearGradient(tankX, waterTopY, tankX, tankY + tankH);
-      wGrad.addColorStop(0, water < 20 ? 'rgba(239, 68, 68, 0.74)' : 'rgba(56, 189, 248, 0.76)');
-      wGrad.addColorStop(1, water < 20 ? 'rgba(127, 29, 29, 0.88)' : 'rgba(14, 116, 144, 0.9)');
-      ctx.fillStyle = wGrad;
+      ctx.fillStyle = water < 20 ? 'rgba(220, 38, 38, 0.78)' : 'rgba(14, 165, 233, 0.78)';
       ctx.beginPath();
       ctx.moveTo(tankX, tankY + tankH);
       for (let sx = tankX; sx <= tankX + tankW; sx += 8) {
@@ -1862,7 +1743,7 @@ export const eclssGame: GameModule = {
       ctx.closePath();
       ctx.fill();
 
-      // Luminous water meniscus surface crest
+      // Water meniscus surface crest
       ctx.strokeStyle = water < 20 ? 'rgba(254, 202, 202, 0.8)' : 'rgba(224, 242, 254, 0.85)';
       ctx.lineWidth = 1.6;
       ctx.beginPath();
@@ -1884,9 +1765,6 @@ export const eclssGame: GameModule = {
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
-
-      // Pressurized sight-glass specular glazing over Pure Water Tank
-      drawGlassViewport(ctx, tankX + 3, tankY + 3, tankW - 6, tankH - 6, 11, 'rgba(56, 189, 248, 0.06)');
 
       // Tank outer pressurized bezel
       ctx.strokeStyle = water < 20 ? '#ef4444' : water < 34 ? '#f59e0b' : '#38bdf8';

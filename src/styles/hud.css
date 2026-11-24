@@ -53,12 +53,9 @@
   pointer-events: auto;
   width: 100%;
   padding: 8px 12px 9px;
-  --arwes-bg: rgba(6, 14, 28, 0.86);
+  --arwes-bg: rgba(6, 14, 28, 0.93);
   --arwes-line: var(--game-accent, #00d8ff);
   --arwes-deco: var(--game-accent, #00d8ff);
-  --arwes-glow: rgba(0, 216, 255, 0.32);
-  backdrop-filter: blur(14px);
-  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.55));
 }
 
 .hud-mission-row {
@@ -141,14 +138,13 @@
   --aug-br: 6px;
   --aug-border-all: 1px;
   --aug-border-bg: rgba(125, 185, 255, 0.28);
-  --aug-inlay-bg: rgba(6, 15, 30, 0.88);
+  --aug-inlay-bg: rgba(6, 15, 30, 0.94);
   pointer-events: auto;
   width: 100%;
   display: flex;
   align-items: flex-start;
   gap: 7px;
   padding: 6px 10px;
-  backdrop-filter: blur(12px);
   font-size: 11.5px;
   line-height: 1.35;
   color: var(--text-primary);
@@ -191,9 +187,8 @@
   --aug-br: 6px;
   --aug-border-all: 1px;
   --aug-border-bg: rgba(125, 185, 255, 0.28);
-  --aug-inlay-bg: linear-gradient(155deg, rgba(10, 22, 42, 0.88), rgba(5, 12, 24, 0.94));
+  --aug-inlay-bg: linear-gradient(155deg, rgba(10, 22, 42, 0.94), rgba(5, 12, 24, 0.97));
   padding: 7px 10px;
-  backdrop-filter: blur(12px);
   transition: filter var(--dur-fast);
 }
 
@@ -210,7 +205,6 @@
   --aug-border-all: 1.5px;
   --aug-border-bg: rgba(255, 71, 87, 0.92);
   --aug-inlay-bg: linear-gradient(155deg, rgba(64, 14, 22, 0.92), rgba(32, 6, 10, 0.96));
-  filter: drop-shadow(0 0 10px rgba(255, 71, 87, 0.35));
 }
 
 .hud-metric-head {
@@ -304,7 +298,7 @@
   --aug-br: 5px;
   --aug-border-all: 1px;
   --aug-border-bg: rgba(125, 185, 255, 0.34);
-  --aug-inlay-bg: linear-gradient(180deg, rgba(14, 28, 52, 0.88), rgba(7, 15, 30, 0.94));
+  --aug-inlay-bg: linear-gradient(180deg, rgba(14, 28, 52, 0.94), rgba(7, 15, 30, 0.97));
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -314,14 +308,12 @@
   font-family: var(--font-display);
   font-size: 12px;
   font-weight: 600;
-  backdrop-filter: blur(12px);
   transition: transform var(--dur-fast), filter var(--dur-fast);
 }
 
 .hud-btn:hover {
   --aug-border-bg: var(--accent-cyan);
   transform: translateY(-1px);
-  filter: drop-shadow(0 0 8px rgba(0, 216, 255, 0.35));
 }
 
 .hud-btn.is-toggled {
@@ -329,7 +321,6 @@
   --aug-border-bg: var(--accent-cyan);
   --aug-inlay-bg: linear-gradient(135deg, rgba(0, 180, 230, 0.32), rgba(8, 28, 56, 0.95));
   color: #e0f9ff;
-  filter: drop-shadow(0 0 10px rgba(0, 216, 255, 0.42));
 }
 
 .hud-controls-chip {
@@ -368,8 +359,6 @@
   justify-content: center;
   gap: 8px;
   padding: 8px 14px;
-  backdrop-filter: blur(14px);
-  filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.65));
 }
 
 .hud-tactile-deck:empty {
@@ -471,12 +460,10 @@
   --aug-br: 8px;
   --aug-border-all: 1px;
   --aug-border-bg: rgba(0, 216, 255, 0.65);
-  --aug-inlay-bg: linear-gradient(155deg, rgba(8, 20, 40, 0.94), rgba(4, 10, 22, 0.97));
+  --aug-inlay-bg: linear-gradient(155deg, rgba(8, 20, 40, 0.96), rgba(4, 10, 22, 0.98));
   pointer-events: auto;
   width: 100%;
   padding: 9px 12px;
-  backdrop-filter: blur(14px);
-  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.6));
   animation: slideToast 240ms var(--ease-orbital);
 }
 
@@ -586,7 +573,6 @@
 .result-stars-display svg {
   width: 28px;
   height: 28px;
-  filter: drop-shadow(0 0 8px rgba(245, 166, 35, 0.55));
 }
 
 .result-metrics-list {
@@ -636,6 +622,92 @@
   display: block;
   color: var(--text-primary);
   margin-bottom: 2px;
+}
+
+@media (max-width: 1440px), (max-height: 800px) {
+  .hud-layer {
+    grid-template-columns: minmax(215px, 276px) 1fr minmax(210px, 272px);
+    gap: 6px;
+  }
+  .hud-mission-box {
+    padding: 6px 9px;
+  }
+  .hud-mission-title {
+    font-size: 12.5px;
+  }
+  .hud-mission-module {
+    font-size: 9.5px;
+  }
+  .hud-level-bar {
+    margin-top: 4px;
+    gap: 4px;
+  }
+  .hud-level-btn {
+    height: 22px;
+    padding: 0 5px;
+    font-size: 10.5px;
+  }
+  .hud-objective-pill {
+    padding: 4px 8px;
+    font-size: 10.5px;
+    line-height: 1.3;
+  }
+  .hud-telemetry-grid {
+    gap: 4px;
+  }
+  .hud-metric-card {
+    padding: 5px 8px;
+  }
+  .hud-metric-head {
+    font-size: 9.5px;
+  }
+  .hud-metric-val {
+    font-size: 12.5px;
+  }
+  .hud-metric-bar {
+    margin-top: 3px;
+    height: 3px;
+  }
+  .hud-btn {
+    height: 28px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+  .hud-controls-chip {
+    padding: 3px 8px;
+    font-size: 10px;
+  }
+  .hud-tactile-deck {
+    padding: 5px 10px;
+    gap: 5px;
+  }
+  .deck-ctrl-btn {
+    min-height: 30px;
+    padding: 0 9px;
+    font-size: 11px;
+  }
+  .deck-slider-group {
+    padding: 3px 8px;
+    gap: 6px;
+    font-size: 10.5px;
+  }
+  .deck-slider-group input[type='range'] {
+    width: 82px;
+  }
+  .hud-bottom-right {
+    width: min(268px, 26vw);
+  }
+  .science-toast {
+    padding: 7px 10px;
+  }
+  .science-toast-text {
+    font-size: 11px;
+  }
+  .briefing-step-card,
+  .result-score-box,
+  .result-science-box {
+    padding: 11px 12px;
+  }
 }
 
 @media (max-width: 980px) {

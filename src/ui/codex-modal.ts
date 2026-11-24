@@ -76,7 +76,7 @@ export function buildCodexModal(
       card.className = `codex-card${unlocked ? ' is-unlocked' : ''}`;
       card.setAttribute('data-augmented-ui', 'tl-clip br-clip border inlay');
       if (highlightId && entry.id === highlightId) {
-        card.style.filter = 'drop-shadow(0 0 14px rgba(0,216,255,0.5))';
+        card.style.boxShadow = '0 0 0 1.5px rgba(0, 216, 255, 0.78)';
       }
 
       if (unlocked) {

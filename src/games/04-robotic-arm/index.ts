@@ -1,3 +1,4 @@
+import { drawRoboticArm3D, drawSciencePayload3D } from '../../core/aerospace-models';
 import {
   ParticleSystem,
   StarfieldRenderer,
@@ -11,13 +12,11 @@ import {
   setupHiDPICanvas,
 } from '../../core/canvas-utils';
 import {
-  drawAdditiveGlow,
-  drawGlassViewport,
-  drawSunLensFlare,
+  drawBakedBackdrop,
   drawTitaniumModule,
   getMLIPattern,
-  getTitaniumPattern,
 } from '../../core/materials';
+import { drawModelSprite } from '../../core/model-sprites';
 import type {
   GameHostAPI,
   GameInstance,
@@ -256,8 +255,9 @@ export const roboticArmGame: GameModule = {
     const recomputeViewport = (w: number, h: number) => {
       viewW = w;
       viewH = h;
-      const safeTop = 122;
-      const safeBottom = Math.max(safeTop + 180, h - 138);
+      const compact = h <= 720;
+      const safeTop = compact ? 100 : 122;
+      const safeBottom = Math.max(safeTop + 180, h - (compact ? 94 : 138));
       const safeW = Math.max(420, w - 96);
       const safeH = Math.max(180, safeBottom - safeTop);
       scale = Math.min(safeW / WORLD_W, safeH / WORLD_H);
@@ -1231,102 +1231,51 @@ export const roboticArmGame: GameModule = {
       ctx.save();
       const mli = getMLIPattern(ctx);
 
-      // Background recessed Solar Wings behind the station hull
+      // Background recessed Solar Wings & mast struts anchored cleanly into station hull
       ctx.globalAlpha = 0.44;
+      drawTitaniumModule(ctx, -366, 56, 8, HULL_TOP_Y - 52, { vertical: true, radius: 2, rivets: false });
+      drawTitaniumModule(ctx, 367, 56, 8, HULL_TOP_Y - 52, { vertical: true, radius: 2, rivets: false });
       drawSolarPanelRect(ctx, -395, -148, 66, 210, 0.88);
       drawSolarPanelRect(ctx, 338, -148, 66, 210, 0.8);
       ctx.globalAlpha = 1;
 
-      // Exterior Hull Backbone Cylinder along y = [HULL_TOP_Y, 176] using PBR brushed titanium module
-      drawTitaniumModule(ctx, -448, HULL_TOP_Y, 896, 62, {
-        radius: 10,
-        mliBands: [0.06, 0.31, 0.64, 0.87],
-        rivets: true,
-        rimGlow: 'rgba(226, 242, 255, 0.82)',
-      });
-
-      // Top metallic bevel specular highlight rail along exterior dorsal spine
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.52)';
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.moveTo(-436, HULL_TOP_Y + 2);
-      ctx.lineTo(436, HULL_TOP_Y + 2);
-      ctx.stroke();
-
-      // Crinkled gold Kapton MLI equipment bay wraps along exterior skin
-      const drawFoil = (x: number, w: number) => {
-        ctx.save();
-        ctx.fillStyle = mli ?? '#d97706';
-        ctx.beginPath();
-        ctx.roundRect(x, HULL_TOP_Y + 11, w, 25, 2.5);
-        ctx.fill();
-
-        const wrap = ctx.createLinearGradient(x, HULL_TOP_Y + 11, x, HULL_TOP_Y + 36);
-        wrap.addColorStop(0, 'rgba(255, 252, 220, 0.34)');
-        wrap.addColorStop(0.28, 'rgba(255, 255, 255, 0.24)');
-        wrap.addColorStop(0.78, 'rgba(12, 8, 2, 0.42)');
-        wrap.addColorStop(1, 'rgba(30, 58, 100, 0.32)');
-        ctx.fillStyle = wrap;
-        ctx.fill();
-
-        ctx.strokeStyle = 'rgba(254, 243, 199, 0.72)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.restore();
-      };
-      drawFoil(-385, 42);
-      drawFoil(-165, 56);
-      drawFoil(125, 52);
-      drawFoil(340, 56);
-
-      // Module Ring Bulkheads with recessed shadow groove & specular lip
-      for (const rx of [-195, 195]) {
-        ctx.strokeStyle = 'rgba(15, 23, 42, 0.65)';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(rx, HULL_TOP_Y);
-        ctx.lineTo(rx, HULL_TOP_Y + 62);
-        ctx.stroke();
-
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(rx + 2, HULL_TOP_Y);
-        ctx.lineTo(rx + 2, HULL_TOP_Y + 62);
-        ctx.stroke();
+      // 3D Studio-Rendered Station Backbone Hull Segments (4 x 224x80 matching 960:342 ratio)
+      let allHullLoaded = true;
+      for (let i = 0; i < 4; i++) {
+        const ok = drawModelSprite(ctx, 'eva-station-hull', -448 + i * 224, HULL_TOP_Y - 8, 224, 80, {
+          flipX: i % 2 === 1,
+        });
+        if (!ok) allHullLoaded = false;
       }
 
-      // Aerospace identity stripe
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-438, HULL_TOP_Y + 42, 876, 4);
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(-438, HULL_TOP_Y + 47, 876, 2);
+      if (allHullLoaded) {
+        for (const seamX of [-224, 224]) {
+          drawTitaniumModule(ctx, seamX - 10, HULL_TOP_Y + 4, 20, 56, {
+            radius: 4,
+            mliBands: [0.3],
+            rivets: false,
+            rimGlow: 'rgba(186, 230, 253, 0.72)',
+          });
+        }
+      }
 
-      // Module Names
-      ctx.font = '700 10px "JetBrains Mono", monospace';
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.textAlign = 'center';
-      ctx.fillText('天和核心舱 aft', -315, HULL_TOP_Y + 28);
-      ctx.fillText('CSS · 节点舱 / 机械臂爬行轨道', 0, HULL_TOP_Y + 42);
-      ctx.fillText('梦天实验舱暴露平台', 318, HULL_TOP_Y + 28);
+      if (!allHullLoaded) {
+        drawTitaniumModule(ctx, -448, HULL_TOP_Y, 896, 62, {
+          radius: 10,
+          mliBands: [0.06, 0.31, 0.64, 0.87],
+          rivets: true,
+          rimGlow: 'rgba(226, 242, 255, 0.82)',
+        });
+      }
+      void mli;
 
-      // PDGF Target Adapters (A1, A2, A3) with active grapple pin additive radiance
+      // PDGF Target Adapters (A1, A2, A3)
       const lockCand = findLockableAdapter();
       for (const ad of cfg.adapters) {
         const isBase = ad.id === activeBaseId;
         const isCand = lockCand?.id === ad.id;
         const isStep1Hint = cfg.requireInchworm && activeBaseId === 'A1' && ad.id === 'A2';
         const pulse = 0.5 + 0.5 * Math.sin(simTime * 6.5);
-
-        if (isBase) {
-          drawAdditiveGlow(ctx, ad.x, ad.y - 2, 26, '34, 197, 94', 0.48);
-        } else if (isCand) {
-          drawAdditiveGlow(ctx, ad.x, ad.y - 2, 30 + pulse * 8, '74, 222, 128', 0.55);
-        } else if (isStep1Hint) {
-          drawAdditiveGlow(ctx, ad.x, ad.y - 2, 28 + pulse * 7, '167, 139, 250', 0.48);
-        } else {
-          drawAdditiveGlow(ctx, ad.x, ad.y - 2, 14, '167, 139, 250', 0.22);
-        }
 
         if (isCand || isStep1Hint) {
           ctx.strokeStyle = isCand ? '#22c55e' : '#a78bfa';
@@ -1347,10 +1296,8 @@ export const roboticArmGame: GameModule = {
         ctx.roundRect(ad.x - 13, ad.y - 6, 26, 9, 2.5);
         ctx.fill();
 
-        // Center PDGF grapple pin with additive beacon core
-        const pinRgb = isBase ? '74, 222, 128' : isCand ? '74, 222, 128' : '196, 181, 253';
-        drawAdditiveGlow(ctx, ad.x, ad.y - 2, 10, pinRgb, isBase || isCand ? 0.72 : 0.42);
-        ctx.fillStyle = isBase ? '#bbf7d0' : '#f8fafc';
+        // Center PDGF grapple pin
+        ctx.fillStyle = isBase ? '#4ade80' : isCand ? '#86efac' : '#f8fafc';
         ctx.beginPath();
         ctx.arc(ad.x, ad.y - 2, 3.8, 0, Math.PI * 2);
         ctx.fill();
@@ -1380,25 +1327,16 @@ export const roboticArmGame: GameModule = {
         rimGlow: 'rgba(148, 185, 225, 0.65)',
       });
 
-      // Target Slot B Illuminated Receiving Cradle with volumetric holographic glow
+      // Target Slot B Illuminated Receiving Cradle (flat translucent bay, no gradient/lighter)
       const sx = cfg.targetSlot.x;
       const sy = cfg.targetSlot.y;
       const slotNear = carrying && dist(payloadX, payloadY, sx, sy) <= 38;
       const sp = 0.5 + 0.5 * Math.sin(simTime * 5.2);
-      const slotRgb = slotNear ? '34, 197, 94' : '56, 189, 248';
 
-      // Volumetric cradle radiance & vertical holographic docking guide curtain
-      drawAdditiveGlow(ctx, sx, sy, slotNear ? 52 : 38 + sp * 8, slotRgb, slotNear ? 0.52 : 0.28 + sp * 0.1);
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const holoGrad = ctx.createLinearGradient(sx, HULL_TOP_Y, sx, sy - 26);
-      holoGrad.addColorStop(0, `rgba(${slotRgb}, ${slotNear ? 0.34 : 0.18})`);
-      holoGrad.addColorStop(1, `rgba(${slotRgb}, 0)`);
-      ctx.fillStyle = holoGrad;
+      ctx.fillStyle = slotNear ? 'rgba(34, 197, 94, 0.14)' : 'rgba(56, 189, 248, 0.08)';
       ctx.fillRect(sx - 22, sy - 26, 44, HULL_TOP_Y - (sy - 26));
-      ctx.restore();
 
-      // Machined cradle pedestal & glowing supports
+      // Machined cradle pedestal & supports
       drawTitaniumModule(ctx, sx - 26, HULL_TOP_Y - 8, 52, 8, {
         radius: 2,
         rivets: false,
@@ -1413,13 +1351,11 @@ export const roboticArmGame: GameModule = {
       ctx.lineTo(sx + 24, sy - 6);
       ctx.stroke();
 
-      // Glowing corner alignment beacons on cradle stanchions
-      drawAdditiveGlow(ctx, sx - 24, sy - 6, 10, slotRgb, 0.58);
-      drawAdditiveGlow(ctx, sx + 24, sy - 6, 10, slotRgb, 0.58);
-      ctx.fillStyle = '#ffffff';
+      // Corner alignment dots on cradle stanchions
+      ctx.fillStyle = slotNear ? '#4ade80' : '#e0f2fe';
       ctx.beginPath();
-      ctx.arc(sx - 24, sy - 6, 2.2, 0, Math.PI * 2);
-      ctx.arc(sx + 24, sy - 6, 2.2, 0, Math.PI * 2);
+      ctx.arc(sx - 24, sy - 6, 2.5, 0, Math.PI * 2);
+      ctx.arc(sx + 24, sy - 6, 2.5, 0, Math.PI * 2);
       ctx.fill();
 
       // Glowing Holographic Target Box Outline
@@ -1455,12 +1391,8 @@ export const roboticArmGame: GameModule = {
             rivets: false,
           });
 
-          // Parabolic S-band communication dish with cylindrical metallic sheen
-          const dishGrad = ctx.createLinearGradient(obs.x - 18, obs.topY - 12, obs.x + 18, obs.topY + 8);
-          dishGrad.addColorStop(0, '#ffffff');
-          dishGrad.addColorStop(0.45, '#cbd5e1');
-          dishGrad.addColorStop(1, '#475569');
-          ctx.fillStyle = dishGrad;
+          // Parabolic S-band communication dish (flat metallic steel)
+          ctx.fillStyle = '#cbd5e1';
           ctx.strokeStyle = '#64748b';
           ctx.lineWidth = 1.8;
           ctx.beginPath();
@@ -1476,7 +1408,6 @@ export const roboticArmGame: GameModule = {
           ctx.moveTo(obs.x, obs.topY + 6);
           ctx.lineTo(obs.x, obs.topY - 12);
           ctx.stroke();
-          drawAdditiveGlow(ctx, obs.x, obs.topY - 12, 12, '251, 191, 36', 0.55);
           ctx.fillStyle = '#fef08a';
           ctx.beginPath();
           ctx.arc(obs.x, obs.topY - 12, 3.2, 0, Math.PI * 2);
@@ -1512,8 +1443,10 @@ export const roboticArmGame: GameModule = {
           ctx.roundRect(obs.x - 11, obs.topY - 10, 22, 16, 3);
           ctx.fill();
           ctx.stroke();
-          drawGlassViewport(ctx, obs.x - 6, obs.topY - 7, 12, 10, 2.5, 'rgba(56, 189, 248, 0.48)');
-          drawAdditiveGlow(ctx, obs.x, obs.topY - 2, 11, '56, 189, 248', 0.38);
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.56)';
+          ctx.beginPath();
+          ctx.roundRect(obs.x - 6, obs.topY - 7, 12, 10, 2.5);
+          ctx.fill();
         }
 
         ctx.font = '700 9.5px "JetBrains Mono", monospace';
@@ -1525,80 +1458,18 @@ export const roboticArmGame: GameModule = {
     };
 
     const drawPayload = () => {
-      const mli = getMLIPattern(ctx);
       const dTip = dist(tipX, tipY, payloadX, payloadY - 12);
-
-      ctx.save();
-      ctx.translate(payloadX, payloadY);
-      // Slight inertial swing tilt proportional to flexX when carrying
       const tilt = carrying ? clamp(flexX * 0.014, -0.28, 0.28) : 0;
-      ctx.rotate(tilt);
-
-      // Titanium chassis + Crinkled Gold MLI Science Experiment Module Box
-      drawTitaniumModule(ctx, -20, -15, 40, 30, {
-        radius: 5,
-        rivets: false,
-        rimGlow: payloadDocked ? '#4ade80' : carrying ? '#c4b5fd' : '#f8fafc',
-      });
-
-      // Crinkled gold MLI thermal wrap inset across experiment hull
-      ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(-18.5, -13.5, 37, 27, 4);
-      ctx.clip();
-      ctx.fillStyle = mli ?? '#d97706';
-      ctx.fillRect(-19, -14, 38, 28);
-      const foilShade = ctx.createLinearGradient(-19, -14, 19, 14);
-      foilShade.addColorStop(0, 'rgba(255, 252, 225, 0.34)');
-      foilShade.addColorStop(0.32, 'rgba(255, 255, 255, 0.22)');
-      foilShade.addColorStop(0.8, 'rgba(15, 10, 2, 0.42)');
-      foilShade.addColorStop(1, 'rgba(30, 58, 100, 0.34)');
-      ctx.fillStyle = foilShade;
-      ctx.fillRect(-19, -14, 38, 28);
-      ctx.restore();
-
-      // Metallic bevel corner guards
-      ctx.strokeStyle = payloadDocked ? '#4ade80' : carrying ? '#c4b5fd' : 'rgba(241, 248, 255, 0.85)';
-      ctx.lineWidth = 1.9;
-      ctx.beginPath();
-      ctx.roundRect(-19.5, -14.5, 39, 29, 4.5);
-      ctx.stroke();
-
-      // Recessed Instrument Radiator & Telemetry Glass Viewport
-      drawGlassViewport(ctx, -13, -7, 26, 14, 3, 'rgba(9, 18, 34, 0.86)');
-      const led1Rgb = payloadDocked ? '74, 222, 128' : '56, 189, 248';
-      drawAdditiveGlow(ctx, -6, -1, 8, led1Rgb, 0.55);
-      ctx.fillStyle = payloadDocked ? '#4ade80' : '#38bdf8';
-      ctx.fillRect(-9, -3, 6, 4);
-      drawAdditiveGlow(ctx, 5.5, -1, 8, '251, 191, 36', 0.45);
-      ctx.fillStyle = '#fbbf24';
-      ctx.fillRect(2, -3, 7, 4);
-
-      // Machined Grapple Fixture Pin on Top with luminous capture beacon
-      ctx.strokeStyle = '#e2ecf8';
-      ctx.lineWidth = 3.2;
-      ctx.beginPath();
-      ctx.moveTo(0, -14.5);
-      ctx.lineTo(0, -22.5);
-      ctx.stroke();
       const pinReady = !carrying && !payloadDocked && dTip <= 44;
-      drawAdditiveGlow(
-        ctx,
-        0,
-        -22.5,
-        pinReady ? 17 : 12,
-        pinReady || payloadDocked ? '74, 222, 128' : '56, 189, 248',
-        pinReady ? 0.72 : 0.48
-      );
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(0, -22.5, 3.6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = pinReady ? '#4ade80' : '#38bdf8';
-      ctx.lineWidth = 1.4;
-      ctx.stroke();
 
-      ctx.restore();
+      drawSciencePayload3D(ctx, {
+        x: payloadX,
+        y: payloadY,
+        tilt,
+        docked: payloadDocked,
+        carrying,
+        readyToGrab: pinReady,
+      });
 
       if (!carrying && !payloadDocked) {
         ctx.save();
@@ -1620,281 +1491,32 @@ export const roboticArmGame: GameModule = {
       const visTipY = tipY + flexY;
       const midElbowX = elbowX + flexX * 0.42;
       const midElbowY = elbowY + flexY * 0.42;
-      const sColor = getStressColor(stress);
-      const sRgb = stress < 45 ? '34, 197, 94' : stress < 78 ? '245, 158, 11' : '239, 68, 68';
-      const mli = getMLIPattern(ctx);
-      const grain = getTitaniumPattern(ctx);
 
       ctx.save();
-
-      // Helper to render a high-detail brushed titanium aerospace boom with cylindrical gradient & specular ridge
-      const drawBoom = (
-        x1: number,
-        y1: number,
-        x2: number,
-        y2: number,
-        bendX: number,
-        bendY: number,
-        label: string
-      ) => {
-        const cx = (x1 + x2) * 0.5 + bendX;
-        const cy = (y1 + y2) * 0.5 + bendY;
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        const len = Math.hypot(dx, dy) || 1;
-        // Unit normal perpendicular to boom axis (oriented upward toward sunlight)
-        let nx = -dy / len;
-        let ny = dx / len;
-        if (ny > 0) {
-          nx = -nx;
-          ny = -ny;
-        }
-
-        // Ambient cast shadow beneath curved boom
-        ctx.save();
-        ctx.strokeStyle = 'rgba(2, 6, 18, 0.52)';
-        ctx.lineWidth = 17;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(x1, y1 + 3);
-        ctx.quadraticCurveTo(cx, cy + 3, x2, y2 + 3);
-        ctx.stroke();
-
-        // Transverse cylindrical titanium gradient across boom diameter
-        const boomGrad = ctx.createLinearGradient(
-          cx + nx * 8,
-          cy + ny * 8,
-          cx - nx * 8,
-          cy - ny * 8
-        );
-        boomGrad.addColorStop(0, '#9fb6d1');
-        boomGrad.addColorStop(0.22, '#ffffff');
-        boomGrad.addColorStop(0.46, '#d8e6f5');
-        boomGrad.addColorStop(0.76, '#506886');
-        boomGrad.addColorStop(0.94, '#1f3048');
-        boomGrad.addColorStop(1, '#365880'); // Earth blue albedo bounce
-
-        // Dark machined outer casing rim
-        ctx.strokeStyle = '#24364e';
-        ctx.lineWidth = 15.2;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.quadraticCurveTo(cx, cy, x2, y2);
-        ctx.stroke();
-
-        // Cylindrical metallic boom shell
-        ctx.strokeStyle = boomGrad;
-        ctx.lineWidth = 12.2;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.quadraticCurveTo(cx, cy, x2, y2);
-        ctx.stroke();
-
-        // Subtle brushed titanium surface grain along boom
-        if (grain) {
-          ctx.strokeStyle = grain;
-          ctx.lineWidth = 11.2;
-          ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.quadraticCurveTo(cx, cy, x2, y2);
-          ctx.stroke();
-        }
-
-        // Crisp sunlit specular highlight ridge along top edge of cylindrical boom
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-        ctx.lineWidth = 2.0;
-        ctx.beginPath();
-        ctx.moveTo(x1 + nx * 3.1, y1 + ny * 3.1);
-        ctx.quadraticCurveTo(cx + nx * 3.1, cy + ny * 3.1, x2 + nx * 3.1, y2 + ny * 3.1);
-        ctx.stroke();
-
-        // Center structural telemetry conduit stripe (glows under high flexible stress)
-        if (stress > 55) {
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          ctx.strokeStyle = `rgba(${sRgb}, 0.45)`;
-          ctx.lineWidth = 5.4;
-          ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.quadraticCurveTo(cx, cy, x2, y2);
-          ctx.stroke();
-          ctx.restore();
-        }
-        ctx.strokeStyle = stress > 55 ? sColor : '#475569';
-        ctx.lineWidth = 2.2;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.quadraticCurveTo(cx, cy, x2, y2);
-        ctx.stroke();
-
-        // Gold Kapton MLI thermal cuff bands near both boom ends
-        const ang = Math.atan2(dy, dx);
-        for (const t of [0.14, 0.86]) {
-          const u = 1 - t;
-          const bx = u * u * x1 + 2 * u * t * cx + t * t * x2;
-          const by = u * u * y1 + 2 * u * t * cy + t * t * y2;
-          ctx.save();
-          ctx.translate(bx, by);
-          ctx.rotate(ang);
-          ctx.fillStyle = mli ?? '#d97706';
-          ctx.fillRect(-5, -6.4, 10, 12.8);
-          const cuffShade = ctx.createLinearGradient(0, -6.4, 0, 6.4);
-          cuffShade.addColorStop(0, 'rgba(255, 252, 220, 0.35)');
-          cuffShade.addColorStop(0.28, 'rgba(255, 255, 255, 0.3)');
-          cuffShade.addColorStop(0.82, 'rgba(12, 8, 2, 0.55)');
-          cuffShade.addColorStop(1, 'rgba(30, 58, 100, 0.35)');
-          ctx.fillStyle = cuffShade;
-          ctx.fillRect(-5, -6.4, 10, 12.8);
-          ctx.strokeStyle = 'rgba(254, 243, 199, 0.65)';
-          ctx.lineWidth = 0.8;
-          ctx.strokeRect(-5, -6.4, 10, 12.8);
-          ctx.restore();
-        }
-
-        // Tiny Aerospace Label along boom midpoint
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(ang > Math.PI / 2 || ang < -Math.PI / 2 ? ang + Math.PI : ang);
-        ctx.font = '700 8.5px "JetBrains Mono", monospace';
-        ctx.fillStyle = '#0f172a';
-        ctx.textAlign = 'center';
-        ctx.fillText(label, 0, 3);
-        ctx.restore();
-        ctx.restore();
-      };
-
-      // Boom 1 (Shoulder -> Elbow) and Boom 2 (Elbow -> Wrist/Tip)
-      drawBoom(base.x, base.y, midElbowX, midElbowY, flexX * 0.18, flexY * 0.18, 'CSS-ARM-01');
-      drawBoom(midElbowX, midElbowY, visTipX, visTipY, flexX * 0.32, flexY * 0.32, 'CSS-ARM-02');
-
-      // Motorized Rotary Joint Drums (Shoulder & Elbow) with Gold Kapton Actuator Wraps & Stress Bloom
-      const drawJointDrum = (jx: number, jy: number, r: number) => {
-        // Subtle stress-reactive actuator glow
-        drawAdditiveGlow(ctx, jx, jy, r * 2.1, sRgb, stress > 50 ? 0.55 : 0.24);
-
-        // Outer gold Kapton thermal actuator wrap
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(jx, jy, r + 1.5, 0, Math.PI * 2);
-        ctx.fillStyle = mli ?? '#d97706';
-        ctx.fill();
-        const wrapBevel = ctx.createRadialGradient(jx - r * 0.35, jy - r * 0.35, 1, jx, jy, r + 1.5);
-        wrapBevel.addColorStop(0, 'rgba(255, 255, 230, 0.42)');
-        wrapBevel.addColorStop(0.55, 'rgba(255, 255, 255, 0.05)');
-        wrapBevel.addColorStop(1, 'rgba(12, 8, 2, 0.62)');
-        ctx.fillStyle = wrapBevel;
-        ctx.fill();
-        ctx.strokeStyle = sColor;
-        ctx.lineWidth = 2.2;
-        ctx.stroke();
-
-        // Inner brushed titanium stator housing
-        const statorGrad = ctx.createRadialGradient(jx - r * 0.25, jy - r * 0.25, 1, jx, jy, r * 0.72);
-        statorGrad.addColorStop(0, '#e2ecf8');
-        statorGrad.addColorStop(0.55, '#64748b');
-        statorGrad.addColorStop(1, '#1e293b');
-        ctx.fillStyle = statorGrad;
-        ctx.beginPath();
-        ctx.arc(jx, jy, r * 0.68, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Precision bolt circle rivets around rotary actuator
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-        for (let i = 0; i < 6; i++) {
-          const ba = (i * Math.PI) / 3;
-          ctx.beginPath();
-          ctx.arc(jx + Math.cos(ba) * r * 0.52, jy + Math.sin(ba) * r * 0.52, 1.1, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // Center optical encoder axle core
-        ctx.fillStyle = '#091120';
-        ctx.beginPath();
-        ctx.arc(jx, jy, r * 0.26, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = sColor;
-        ctx.beginPath();
-        ctx.arc(jx, jy, r * 0.12, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      };
-
-      drawJointDrum(base.x, base.y, 13);
-      drawJointDrum(midElbowX, midElbowY, 11.5);
-
-      // Symmetrical End-Effector Snare Head on Free Tip with Volumetric Laser Alignment Cone
-      const tipAng = Math.atan2(visTipY - midElbowY, visTipX - midElbowX);
-      const laserRgb = carrying ? '34, 197, 94' : '167, 139, 250';
-      ctx.save();
-      ctx.translate(visTipX, visTipY);
-      ctx.rotate(tipAng);
-
-      // Volumetric additive laser alignment cone projecting forward from snare head
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const coneLen = 62;
-      const coneHalfW = 15;
-      const coneGrad = ctx.createLinearGradient(11, 0, 11 + coneLen, 0);
-      coneGrad.addColorStop(0, `rgba(${laserRgb}, 0.52)`);
-      coneGrad.addColorStop(0.45, `rgba(${laserRgb}, 0.20)`);
-      coneGrad.addColorStop(1, `rgba(${laserRgb}, 0)`);
-      ctx.fillStyle = coneGrad;
-      ctx.beginPath();
-      ctx.moveTo(11, -2.2);
-      ctx.lineTo(11 + coneLen, -coneHalfW);
-      ctx.lineTo(11 + coneLen, coneHalfW);
-      ctx.lineTo(11, 2.2);
-      ctx.closePath();
-      ctx.fill();
-
-      // Sharp optical centerline rangefinder beam
-      const beamGrad = ctx.createLinearGradient(11, 0, 11 + coneLen * 0.92, 0);
-      beamGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
-      beamGrad.addColorStop(0.5, `rgba(${laserRgb}, 0.65)`);
-      beamGrad.addColorStop(1, `rgba(${laserRgb}, 0)`);
-      ctx.strokeStyle = beamGrad;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(11, 0);
-      ctx.lineTo(11 + coneLen * 0.92, 0);
-      ctx.stroke();
-      ctx.restore();
-
-      // Optical laser emitter diode additive bloom
-      drawAdditiveGlow(ctx, 11, 0, 14, laserRgb, 0.65);
-
-      // Brushed titanium wrist housing + gold Kapton collar
-      drawTitaniumModule(ctx, -9, -8.5, 18, 17, {
-        radius: 4,
-        rivets: false,
-        rimGlow: carrying ? '#4ade80' : '#c4b5fd',
+      drawRoboticArm3D(ctx, {
+        baseX: base.x,
+        baseY: base.y,
+        elbowX: midElbowX,
+        elbowY: midElbowY,
+        tipX: visTipX,
+        tipY: visTipY,
+        boomThickness: 20,
+        jointRadius: 16,
+        effectorSize: 36,
+        bend1X: flexX * 0.18,
+        bend1Y: flexY * 0.18,
+        bend2X: flexX * 0.32,
+        bend2Y: flexY * 0.32,
+        stress,
+        carrying,
+        showLaserCone: true,
+        boomLabels: ['CSS-ARM-01', 'CSS-ARM-02'],
       });
-      if (mli) {
-        ctx.fillStyle = mli;
-        ctx.fillRect(-7.5, -7.5, 5, 15);
-      }
-
-      // Symmetrical 3-jaw snare claws with bright metallic specular edge
-      ctx.strokeStyle = '#e8f1fa';
-      ctx.lineWidth = 2.6;
-      ctx.lineCap = 'round';
-      const open = carrying ? 4 : 7;
-      ctx.beginPath();
-      ctx.moveTo(7, -open);
-      ctx.lineTo(14, -open + 2);
-      ctx.moveTo(7, open);
-      ctx.lineTo(14, open - 2);
-      ctx.stroke();
-
-      ctx.restore();
 
       // Target Reticle Crosshair controlled by user with subtle optical glow
       const pulse = 0.5 + 0.5 * Math.sin(simTime * 5);
       const outOfReach = dist(base.x, base.y, targetX, targetY) > R_MAX + 2;
       const retColor = outOfReach ? '#f59e0b' : '#a78bfa';
-      const retRgb = outOfReach ? '245, 158, 11' : '167, 139, 250';
-
-      drawAdditiveGlow(ctx, targetX, targetY, 22 + pulse * 4, retRgb, 0.34);
 
       ctx.strokeStyle = retColor;
       ctx.lineWidth = 1.8;
@@ -2025,14 +1647,15 @@ export const roboticArmGame: GameModule = {
     };
 
     const render = () => {
-      starfield.draw(ctx, viewW, viewH, simTime, -simTime * 2.5, 0);
-      drawEarthHorizon(ctx, viewW, viewH, simTime, {
-        yRatio: 1.8,
-        radiusScale: 1.2,
-        sunPhase: 0.35,
-        darken: 0.22,
-      });
-      drawSunLensFlare(ctx, viewW * 0.13, viewH * 0.16, 26, 0.72);
+      if (!drawBakedBackdrop(ctx, 'leo-earth', viewW, viewH, 0.22, 0.32)) {
+        starfield.draw(ctx, viewW, viewH, simTime, -simTime * 2.5, 0);
+        drawEarthHorizon(ctx, viewW, viewH, simTime, {
+          yRatio: 1.8,
+          radiusScale: 1.2,
+          sunPhase: 0.35,
+          darken: 0.22,
+        });
+      }
 
       ctx.save();
       ctx.translate(originX, originY);

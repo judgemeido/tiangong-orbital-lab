@@ -6,6 +6,7 @@ import './styles/hud.css';
 import { AudioEngine } from './core/audio-engine';
 import type { GameHostAPI, GameId, GameInstance, GameModule, GameResult } from './core/game-interface';
 import { GAME_MODULES, getGameModule } from './core/game-registry';
+import { getEffectiveQuality, initPerfProfile, setPerfPreference } from './core/perf-profile';
 import { SaveStore } from './core/save-store';
 import { buildCodexModal } from './ui/codex-modal';
 import { buildBriefingModal, buildResultModal, GameHudShell } from './ui/hud-kit';
@@ -30,6 +31,7 @@ class OrbitalLabApp {
 
   constructor(root: HTMLElement) {
     this.root = root;
+    initPerfProfile(this.save.getPerfMode());
     this.audio.setMuted(this.save.isMuted());
 
     const metas = GAME_MODULES.map((m) => m.meta);
@@ -40,6 +42,7 @@ class OrbitalLabApp {
       onOpenCodex: () => this.openCodex(),
       onToggleMute: () => this.toggleMute(),
       onToggleFullscreen: () => this.toggleFullscreen(),
+      onTogglePerf: () => this.togglePerfMode(),
     });
 
     this.stage = document.createElement('main');
@@ -225,6 +228,13 @@ class OrbitalLabApp {
     this.audio.setMuted(next);
     this.save.setMuted(next);
     this.dock.refreshMute();
+  }
+
+  private togglePerfMode(): void {
+    const next = getEffectiveQuality() === 'low' ? 'high' : 'low';
+    setPerfPreference(next);
+    this.save.setPerfMode(next);
+    this.dock.refreshPerf();
   }
 
   private toggleFullscreen(): void {

@@ -10,13 +10,11 @@ import {
   StarfieldRenderer,
 } from '../../core/canvas-utils';
 import {
-  drawAdditiveGlow,
-  drawGlassViewport,
-  drawSunLensFlare,
+  drawBakedBackdrop,
   drawTitaniumModule,
   getMLIPattern,
-  getTitaniumPattern,
 } from '../../core/materials';
+import { drawModelSprite, isModelSpriteLoaded } from '../../core/model-sprites';
 import type {
   GameHostAPI,
   GameInstance,
@@ -316,8 +314,9 @@ export const dockingGame: GameModule = {
     };
 
     const getLayout = () => {
-      const safeTop = 124;
-      const safeBottom = Math.max(safeTop + 200, height - 134);
+      const compact = height <= 720;
+      const safeTop = compact ? 102 : 124;
+      const safeBottom = Math.max(safeTop + 190, height - (compact ? 94 : 134));
       const centerY = (safeTop + safeBottom) * 0.52;
       const portX = clamp(width * 0.75, Math.min(width - 175, 520), width - 210);
       return { safeTop, safeBottom, centerY, portX };
@@ -1021,19 +1020,11 @@ export const dockingGame: GameModule = {
 
       const corridorLen = Math.max(360, portX - 70);
 
-      // Subtle glowing capture channel fill
-      const bandGrad = ctx.createLinearGradient(-corridorLen, 0, 0, 0);
+      // Crisp flat capture channel fill
       const baseAlpha = eclipse ? 0.08 : 0.12;
-      if (inCorridor) {
-        bandGrad.addColorStop(0, 'rgba(34, 197, 94, 0)');
-        bandGrad.addColorStop(0.65, `rgba(34, 197, 94, ${baseAlpha})`);
-        bandGrad.addColorStop(1, 'rgba(34, 197, 94, 0.22)');
-      } else {
-        bandGrad.addColorStop(0, 'rgba(56, 189, 248, 0)');
-        bandGrad.addColorStop(0.65, `rgba(56, 189, 248, ${baseAlpha * 0.7})`);
-        bandGrad.addColorStop(1, 'rgba(245, 158, 11, 0.16)');
-      }
-      ctx.fillStyle = bandGrad;
+      ctx.fillStyle = inCorridor
+        ? `rgba(34, 197, 94, ${baseAlpha})`
+        : `rgba(56, 189, 248, ${(baseAlpha * 0.7).toFixed(3)})`;
       ctx.fillRect(-corridorLen, -MAX_CAPTURE_OFFSET_Y, corridorLen, MAX_CAPTURE_OFFSET_Y * 2);
 
       // Upper & lower ±14px corridor rails
@@ -1108,116 +1099,36 @@ export const dockingGame: GameModule = {
       ctx.rotate(targetAng);
 
       const lit = eclipse ? 0.34 : 0.94;
-      const mli = getMLIPattern(ctx);
-      const grain = getTitaniumPattern(ctx);
 
-      // Station dorsal & ventral solar wing roots on far right
-      drawSolarPanelRect(ctx, 118, -168, 42, 114, lit);
-      drawSolarPanelRect(ctx, 118, 54, 42, 114, lit);
-      // Brushed titanium wing mast struts
-      drawTitaniumModule(ctx, 134, -56, 10, 112, {
-        vertical: true,
-        radius: 3,
-        rivets: false,
-        rimGlow: eclipse ? 'rgba(100, 140, 190, 0.4)' : 'rgba(226, 240, 255, 0.72)',
+      // Station dorsal & ventral solar wing roots on right
+      drawSolarPanelRect(ctx, 185, -168, 43, 122, lit);
+      drawSolarPanelRect(ctx, 185, 46, 43, 122, lit);
+
+      const usedStationSprite = drawModelSprite(ctx, 'tianhe-dock-side', -4, -44, 290, 88, {
+        brightness: eclipse ? 0.45 : 1.0,
       });
 
-      // Main Tianhe Core Module pressurized titanium cylinder with crinkled gold MLI thermal bands
-      drawTitaniumModule(ctx, 62, -52, 170, 104, {
-        radius: 14,
-        mliBands: [0.17, 0.74],
-        rivets: true,
-        rimGlow: eclipse ? 'rgba(100, 145, 200, 0.45)' : 'rgba(241, 248, 255, 0.85)',
-      });
-
-      // Aerospace identity accent band & EVA handrails on core module
-      ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(62, -52, 170, 104, 14);
-      ctx.clip();
-      ctx.fillStyle = eclipse ? 'rgba(2, 132, 199, 0.45)' : 'rgba(2, 132, 199, 0.85)';
-      ctx.fillRect(118, 6, 114, 4);
-      ctx.fillStyle = eclipse ? 'rgba(220, 38, 38, 0.45)' : 'rgba(220, 38, 38, 0.85)';
-      ctx.fillRect(118, 11, 114, 2);
-
-      // Orbital umbra shadow veil over Tianhe cylinder during eclipse
-      if (eclipse) {
-        ctx.fillStyle = 'rgba(4, 10, 26, 0.62)';
-        ctx.fillRect(62, -52, 170, 104);
-      }
-      ctx.restore();
-
-      // Illuminated optical glass porthole viewports with warm/cyan cabin glow
-      for (const wx of [136, 176]) {
-        drawAdditiveGlow(ctx, wx, -16, 15, '56, 189, 248', eclipse ? 0.56 : 0.34);
-        drawGlassViewport(ctx, wx - 6.5, -22.5, 13, 13, 6.5, 'rgba(14, 165, 233, 0.46)');
-      }
-
-      // Forward Docking Node Sphere (节点舱) with brushed titanium grain & Earth albedo bounce
-      ctx.save();
-      const nodeGrad = ctx.createRadialGradient(36, -15, 5, 46, 0, 44);
-      if (eclipse) {
-        nodeGrad.addColorStop(0, '#5b718f');
-        nodeGrad.addColorStop(0.55, '#1e2c42');
-        nodeGrad.addColorStop(0.88, '#0c1526');
-        nodeGrad.addColorStop(1, '#1d3857');
-      } else {
-        nodeGrad.addColorStop(0, '#ffffff');
-        nodeGrad.addColorStop(0.28, '#e8f1fa');
-        nodeGrad.addColorStop(0.68, '#7b93b0');
-        nodeGrad.addColorStop(0.9, '#2a3e59');
-        nodeGrad.addColorStop(1, '#3b5d85');
-      }
-      ctx.fillStyle = nodeGrad;
-      ctx.beginPath();
-      ctx.arc(46, 0, 42, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(46, 0, 42, 0, Math.PI * 2);
-      ctx.clip();
-      if (grain) {
-        ctx.fillStyle = grain;
-        ctx.fillRect(4, -42, 84, 84);
-      }
-      // Radial seam meridian
-      ctx.strokeStyle = 'rgba(10, 18, 34, 0.36)';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.ellipse(46, 0, 18, 42, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-
-      ctx.strokeStyle = eclipse ? 'rgba(148, 185, 225, 0.42)' : 'rgba(235, 245, 255, 0.82)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(46, 0, 42, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-
-      // Docking adapter neck with crinkled gold MLI thermal collar
-      drawTitaniumModule(ctx, 2, -26, 20, 52, {
-        radius: 3,
-        rivets: false,
-        rimGlow: eclipse ? 'rgba(100, 140, 185, 0.45)' : 'rgba(226, 240, 255, 0.72)',
-      });
-      if (mli) {
-        ctx.save();
-        ctx.fillStyle = mli;
-        ctx.fillRect(9, -25, 10, 50);
-        const mliShade = ctx.createLinearGradient(9, -25, 9, 25);
-        mliShade.addColorStop(0, eclipse ? 'rgba(8, 14, 30, 0.45)' : 'rgba(255, 248, 210, 0.24)');
-        mliShade.addColorStop(0.28, eclipse ? 'rgba(255, 240, 190, 0.12)' : 'rgba(255, 255, 255, 0.3)');
-        mliShade.addColorStop(0.82, 'rgba(12, 8, 2, 0.58)');
-        mliShade.addColorStop(1, 'rgba(30, 55, 95, 0.4)');
-        ctx.fillStyle = mliShade;
-        ctx.fillRect(9, -25, 10, 50);
-        ctx.restore();
-      }
-      if (eclipse) {
-        ctx.fillStyle = 'rgba(4, 10, 26, 0.48)';
-        ctx.fillRect(2, -26, 20, 52);
+      if (!usedStationSprite) {
+        // Fallback procedural hull while sprite finishes preloading
+        drawTitaniumModule(ctx, 134, -56, 10, 112, {
+          vertical: true,
+          radius: 3,
+          rivets: false,
+          rimGlow: eclipse ? 'rgba(100, 140, 190, 0.4)' : 'rgba(226, 240, 255, 0.72)',
+        });
+        drawTitaniumModule(ctx, 62, -52, 170, 104, {
+          radius: 14,
+          mliBands: [0.17, 0.74],
+          rivets: true,
+          rimGlow: eclipse ? 'rgba(100, 145, 200, 0.45)' : 'rgba(241, 248, 255, 0.85)',
+        });
+        for (const wx of [136, 176]) {
+          ctx.fillStyle = eclipse ? '#38bdf8' : 'rgba(56, 189, 248, 0.55)';
+          ctx.beginPath();
+          ctx.arc(wx, -16, 6.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        drawTitaniumModule(ctx, 2, -26, 20, 52, { radius: 3, rivets: false });
       }
 
       // Androgynous Peripheral Docking Collar Ring at x = 0
@@ -1227,18 +1138,6 @@ export const dockingGame: GameModule = {
           : readyToLock
           ? '#4ade80'
           : '#38bdf8';
-      const collarGlowRgb =
-        captureProgress > 0 || readyToLock ? '74, 222, 128' : '56, 189, 248';
-
-      // Volumetric docking interface glow along collar
-      drawAdditiveGlow(
-        ctx,
-        -2,
-        0,
-        captureProgress > 0 ? 52 : readyToLock ? 42 : 28,
-        collarGlowRgb,
-        captureProgress > 0 ? 0.55 : readyToLock ? 0.44 : 0.22
-      );
 
       drawTitaniumModule(ctx, -6, -34, 11, 68, {
         radius: 3,
@@ -1257,7 +1156,7 @@ export const dockingGame: GameModule = {
       ctx.roundRect(-6, -34, 11, 68, 3);
       ctx.stroke();
 
-      // 12 Capture Latches arranged along the peripheral collar face with additive latch bloom
+      // 12 Capture Latches arranged along the peripheral collar face
       const latchClamp = captureProgress * 4.5;
       for (let i = 0; i < 12; i++) {
         const u = (i / 11) * 2 - 1; // -1..+1
@@ -1271,16 +1170,6 @@ export const dockingGame: GameModule = {
             : '#f59e0b';
         ctx.fillStyle = latchCol;
         ctx.fillRect(clampedX, ly - 1.6, 5, 3.2);
-        if (readyToLock || captureProgress > 0 || i === 0 || i === 11) {
-          drawAdditiveGlow(
-            ctx,
-            clampedX + 2,
-            ly,
-            captureProgress > 0 ? 10 : 7,
-            captureProgress > 0.35 ? '74, 222, 128' : readyToLock ? '125, 211, 252' : '245, 158, 11',
-            captureProgress > 0 ? 0.48 : 0.32
-          );
-        }
       }
 
       // Guide petals angled outward with metallic rim
@@ -1293,15 +1182,7 @@ export const dockingGame: GameModule = {
       ctx.lineTo(-13, 38);
       ctx.stroke();
 
-      // Optical retro-reflector COAS target cross on collar center + alignment beacon glow
-      drawAdditiveGlow(
-        ctx,
-        -2,
-        0,
-        16,
-        readyToLock ? '74, 222, 128' : '251, 191, 36',
-        readyToLock ? 0.55 : 0.38
-      );
+      // Optical retro-reflector COAS target cross on collar center
       ctx.strokeStyle = readyToLock ? '#4ade80' : '#fbbf24';
       ctx.lineWidth = 1.6;
       ctx.beginPath();
@@ -1311,28 +1192,24 @@ export const dockingGame: GameModule = {
       ctx.lineTo(4, 0);
       ctx.stroke();
 
-      // Blinking aerospace navigation strobes (red port / green starboard) with additive bloom
+      // Blinking aerospace navigation strobes (red port / green starboard)
       const blink = Math.sin(simTime * 5.2) > 0.15;
-      const drawStrobe = (sx: number, sy: number, col: string, rgb: string) => {
-        if (blink) {
-          drawAdditiveGlow(ctx, sx, sy, 22, rgb, 0.72);
-          drawAdditiveGlow(ctx, sx, sy, 9, '255, 255, 255', 0.65);
-        } else {
-          drawAdditiveGlow(ctx, sx, sy, 8, rgb, 0.22);
-        }
+      const drawStrobe = (sx: number, sy: number, col: string) => {
         ctx.fillStyle = blink ? '#ffffff' : col;
         ctx.beginPath();
         ctx.arc(sx, sy, blink ? 3.2 : 2, 0, Math.PI * 2);
         ctx.fill();
       };
-      drawStrobe(66, -54, '#ef4444', '239, 68, 68');
-      drawStrobe(66, 54, '#22c55e', '34, 197, 94');
+      drawStrobe(66, -54, '#ef4444');
+      drawStrobe(66, 54, '#22c55e');
 
+      // Notice: keep unused import silent when sprite active
+      void isModelSpriteLoaded;
       // Label
       ctx.font = '700 10.5px "JetBrains Mono", monospace';
-      ctx.fillStyle = eclipse ? 'rgba(186, 210, 238, 0.72)' : 'rgba(15, 23, 42, 0.82)';
+      ctx.fillStyle = eclipse ? 'rgba(186, 210, 238, 0.72)' : 'rgba(226, 240, 255, 0.88)';
       ctx.textAlign = 'left';
-      ctx.fillText('TIANHE-01', 124, 24);
+      ctx.fillText('TIANHE-01', 124, 56);
 
       ctx.restore();
     };
@@ -1350,129 +1227,32 @@ export const dockingGame: GameModule = {
 
       const lit = eclipse ? 0.35 : 0.96;
       const mli = getMLIPattern(ctx);
-      const grain = getTitaniumPattern(ctx);
 
-      // Twin Solar Arrays extending from Service Module
-      drawSolarPanelRect(ctx, -36, -68, 20, 48, lit);
-      drawSolarPanelRect(ctx, -36, 20, 20, 48, lit);
-      ctx.fillStyle = '#9fb6d1';
-      ctx.fillRect(-28, -22, 4, 44);
-
-      // Service Module (推进舱, rear) — titanium shell + crinkled gold MLI rear thermal skirt
-      drawTitaniumModule(ctx, -44, -16, 28, 32, {
-        radius: 4,
-        rivets: false,
-        rimGlow: eclipse ? 'rgba(125, 175, 225, 0.48)' : 'rgba(241, 248, 255, 0.85)',
+      // Studio-rendered 3D Shenzhou Crew Spacecraft aligned so nose probe tip sits at x = +NOSE_LEN (+46)
+      const usedShenzhouSprite = drawModelSprite(ctx, 'shenzhou-side', -58, -42, 104, 84, {
+        brightness: eclipse ? 0.5 : 1.0,
       });
-      if (mli) {
-        ctx.save();
-        ctx.fillStyle = mli;
-        ctx.fillRect(-43, -15, 9, 30);
-        const skirtShade = ctx.createLinearGradient(-43, -15, -43, 15);
-        skirtShade.addColorStop(0, 'rgba(255, 245, 200, 0.25)');
-        skirtShade.addColorStop(0.25, 'rgba(255, 255, 255, 0.32)');
-        skirtShade.addColorStop(0.8, 'rgba(12, 8, 2, 0.56)');
-        skirtShade.addColorStop(1, 'rgba(30, 55, 95, 0.36)');
-        ctx.fillStyle = skirtShade;
-        ctx.fillRect(-43, -15, 9, 30);
-        ctx.restore();
-      }
-      if (eclipse) {
-        ctx.fillStyle = 'rgba(4, 10, 26, 0.52)';
-        ctx.beginPath();
-        ctx.roundRect(-44, -16, 28, 32, 4);
-        ctx.fill();
+
+      if (!usedShenzhouSprite) {
+        drawSolarPanelRect(ctx, -36, -68, 20, 48, lit);
+        drawSolarPanelRect(ctx, -36, 20, 20, 48, lit);
+        ctx.fillStyle = '#9fb6d1';
+        ctx.fillRect(-28, -22, 4, 44);
+        drawTitaniumModule(ctx, -44, -16, 28, 32, { radius: 4, rivets: false });
+        drawTitaniumModule(ctx, 6, -13, 24, 26, { radius: 7, mliBands: [0.06], rivets: false });
+        if (mli) {
+          ctx.fillStyle = mli;
+          ctx.fillRect(-43, -15, 9, 30);
+        }
       }
 
-      // Return Capsule (返回舱, bell/trapezoid middle) with cylindrical titanium shading & grain
-      ctx.save();
-      const capGrad = ctx.createLinearGradient(-16, -16, -16, 16);
-      if (eclipse) {
-        capGrad.addColorStop(0, '#516784');
-        capGrad.addColorStop(0.26, '#7189a8');
-        capGrad.addColorStop(0.74, '#1b293f');
-        capGrad.addColorStop(1, '#264163');
-      } else {
-        capGrad.addColorStop(0, '#a9c0db');
-        capGrad.addColorStop(0.22, '#ffffff');
-        capGrad.addColorStop(0.55, '#b7c9de');
-        capGrad.addColorStop(0.86, '#394f6b');
-        capGrad.addColorStop(1, '#3b5e85');
-      }
-      ctx.fillStyle = capGrad;
-      ctx.beginPath();
-      ctx.moveTo(-16, -16);
-      ctx.lineTo(6, -12);
-      ctx.lineTo(6, 12);
-      ctx.lineTo(-16, 16);
-      ctx.closePath();
-      ctx.fill();
-      ctx.save();
-      ctx.clip();
-      if (grain) {
-        ctx.fillStyle = grain;
-        ctx.fillRect(-16, -16, 24, 32);
-      }
-      // Thermal heat-shield separation ring
-      ctx.strokeStyle = 'rgba(15, 23, 42, 0.45)';
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(-13, -16);
-      ctx.lineTo(-13, 16);
-      ctx.stroke();
-      ctx.restore();
-      ctx.strokeStyle = eclipse ? 'rgba(125, 170, 215, 0.5)' : 'rgba(235, 245, 255, 0.85)';
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
-      ctx.restore();
-
-      // Orbital Module (轨道舱, forward) with brushed titanium + crinkled gold collar
-      drawTitaniumModule(ctx, 6, -13, 24, 26, {
-        radius: 7,
-        mliBands: [0.06],
-        rivets: false,
-        rimGlow: 'rgba(56, 189, 248, 0.78)',
-      });
-      if (eclipse) {
-        ctx.fillStyle = 'rgba(4, 10, 26, 0.48)';
-        ctx.beginPath();
-        ctx.roundRect(6, -13, 24, 26, 7);
-        ctx.fill();
-      }
-
-      // Forward optical porthole viewport with specular glass sheen & cyan cabin bloom
-      drawAdditiveGlow(ctx, 19, -4, 10, '56, 189, 248', eclipse ? 0.55 : 0.36);
-      drawGlassViewport(ctx, 15, -8, 8.5, 8.5, 4.2, 'rgba(56, 189, 248, 0.58)');
-
-      // Forward Docking Collar & Center Probe (tip at x = +NOSE_LEN = +46)
-      drawTitaniumModule(ctx, 30, -10, 6, 20, {
-        radius: 2,
-        rivets: false,
-        rimGlow: 'rgba(226, 240, 255, 0.75)',
-      });
-      ctx.strokeStyle = '#e2ecf8';
-      ctx.lineWidth = 2.4;
-      ctx.beginPath();
-      ctx.moveTo(36, 0);
-      ctx.lineTo(NOSE_LEN, 0);
-      ctx.stroke();
-      // Probe head optical capture beacon
-      drawAdditiveGlow(ctx, NOSE_LEN, 0, 12, '56, 189, 248', 0.62);
+      // Probe head optical capture beacon at x = +NOSE_LEN (+46)
       ctx.fillStyle = '#e0f2fe';
       ctx.beginPath();
-      ctx.arc(NOSE_LEN, 0, 3.0, 0, Math.PI * 2);
+      ctx.arc(NOSE_LEN, 0, 2.8, 0, Math.PI * 2);
       ctx.fill();
-      // Guide fingers
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.moveTo(36, -9);
-      ctx.lineTo(42, -13);
-      ctx.moveTo(36, 9);
-      ctx.lineTo(42, 13);
-      ctx.stroke();
 
-      // Volumetric RCS Cold-Gas Exhaust Glow Plumes
+      // Lightweight RCS Cold-Gas Plumes (flat translucent cone + inner jet line, no gradients/lighter)
       const drawFlame = (nx: number, ny: number, dx: number, dy: number, len: number, rgb: string) => {
         const mag = Math.hypot(dx, dy) || 1;
         const ux = dx / mag;
@@ -1481,18 +1261,9 @@ export const dockingGame: GameModule = {
         const py = ux;
         const ex = nx + ux * len;
         const ey = ny + uy * len;
-        const spread = Math.max(3.4, len * 0.28);
+        const spread = Math.max(3.2, len * 0.25);
 
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-
-        // Translucent expanding cold-gas cone
-        const coneGrad = ctx.createLinearGradient(nx, ny, ex, ey);
-        coneGrad.addColorStop(0, 'rgba(255, 255, 255, 0.92)');
-        coneGrad.addColorStop(0.28, `rgba(${rgb}, 0.68)`);
-        coneGrad.addColorStop(0.7, `rgba(${rgb}, 0.22)`);
-        coneGrad.addColorStop(1, `rgba(${rgb}, 0)`);
-        ctx.fillStyle = coneGrad;
+        ctx.fillStyle = `rgba(${rgb}, 0.42)`;
         ctx.beginPath();
         ctx.moveTo(nx + px * 1.4, ny + py * 1.4);
         ctx.lineTo(ex + px * spread, ey + py * spread);
@@ -1501,50 +1272,40 @@ export const dockingGame: GameModule = {
         ctx.closePath();
         ctx.fill();
 
-        // Crisp luminous inner expansion jet core
-        const coreGrad = ctx.createLinearGradient(nx, ny, nx + ux * len * 0.65, ny + uy * len * 0.65);
-        coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
-        coreGrad.addColorStop(1, `rgba(${rgb}, 0)`);
-        ctx.strokeStyle = coreGrad;
-        ctx.lineWidth = 2.4;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.lineWidth = 2;
         ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(nx, ny);
-        ctx.lineTo(nx + ux * len * 0.65, ny + uy * len * 0.65);
+        ctx.lineTo(nx + ux * len * 0.55, ny + uy * len * 0.55);
         ctx.stroke();
-
-        ctx.restore();
-
-        // Volumetric additive bloom at thruster nozzle throat & mid-plume
-        drawAdditiveGlow(ctx, nx + ux * 2.5, ny + uy * 2.5, Math.max(10, len * 0.65), rgb, 0.64);
-        drawAdditiveGlow(ctx, nx + ux * len * 0.45, ny + uy * len * 0.45, len * 0.72, rgb, 0.28);
       };
 
       if (fuel > 0 && phase === 'playing') {
         const flicker = 0.82 + Math.random() * 0.42;
         if (isControlActive('fwd')) {
-          drawFlame(-45, -8, -1, 0, 22 * flicker, '56, 189, 248');
-          drawFlame(-45, 8, -1, 0, 22 * flicker, '56, 189, 248');
+          drawFlame(-54, -7, -1, 0, 22 * flicker, '56, 189, 248');
+          drawFlame(-54, 7, -1, 0, 22 * flicker, '56, 189, 248');
         }
         if (isControlActive('retro')) {
-          drawFlame(29, -12, 1, -0.2, 17 * flicker, '125, 211, 252');
-          drawFlame(29, 12, 1, 0.2, 17 * flicker, '125, 211, 252');
+          drawFlame(27, -12, 1, -0.2, 17 * flicker, '125, 211, 252');
+          drawFlame(27, 12, 1, 0.2, 17 * flicker, '125, 211, 252');
         }
         if (isControlActive('port')) {
-          drawFlame(18, 14, 0, 1, 15 * flicker, '125, 211, 252');
-          drawFlame(-24, 16, 0, 1, 15 * flicker, '125, 211, 252');
+          drawFlame(18, 12, 0, 1, 15 * flicker, '125, 211, 252');
+          drawFlame(-34, 13, 0, 1, 15 * flicker, '125, 211, 252');
         }
         if (isControlActive('stbd')) {
-          drawFlame(18, -14, 0, -1, 15 * flicker, '125, 211, 252');
-          drawFlame(-24, -16, 0, -1, 15 * flicker, '125, 211, 252');
+          drawFlame(18, -12, 0, -1, 15 * flicker, '125, 211, 252');
+          drawFlame(-34, -13, 0, -1, 15 * flicker, '125, 211, 252');
         }
         if (isControlActive('ccw')) {
-          drawFlame(26, 13, 0, 1, 14 * flicker, '186, 230, 253');
-          drawFlame(-30, -16, 0, -1, 14 * flicker, '186, 230, 253');
+          drawFlame(24, 12, 0, 1, 14 * flicker, '186, 230, 253');
+          drawFlame(-38, -13, 0, -1, 14 * flicker, '186, 230, 253');
         }
         if (isControlActive('cw')) {
-          drawFlame(26, -13, 0, -1, 14 * flicker, '186, 230, 253');
-          drawFlame(-30, 16, 0, 1, 14 * flicker, '186, 230, 253');
+          drawFlame(24, -12, 0, -1, 14 * flicker, '186, 230, 253');
+          drawFlame(-38, 13, 0, 1, 14 * flicker, '186, 230, 253');
         }
         if (
           isControlActive('sas') &&
@@ -1556,7 +1317,11 @@ export const dockingGame: GameModule = {
           !isControlActive('cw') &&
           (Math.hypot(vx, vy) > 1.2 || Math.abs(omega) > 0.015)
         ) {
-          drawAdditiveGlow(ctx, -10, 0, 18, '253, 224, 71', 0.26 * flicker);
+          ctx.strokeStyle = 'rgba(253, 224, 71, 0.48)';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.arc(-10, 0, 14, 0, Math.PI * 2);
+          ctx.stroke();
         }
       }
 
@@ -1576,37 +1341,28 @@ export const dockingGame: GameModule = {
       ctx.fillStyle = 'rgba(2, 6, 16, 0.62)';
       ctx.fillRect(0, 0, width, height);
 
-      // Volumetric spacecraft docking spotlight cone illuminating station collar
+      // Flat translucent spotlight cone illuminating station collar (no gradient / no lighter)
       const lampX = sx + Math.cos(ang) * 32;
       const lampY = sy + Math.sin(ang) * 32;
       const beamLen = Math.max(420, Math.hypot(portX - lampX, portY - lampY) + 120);
       const spread = 0.24;
 
-      ctx.globalCompositeOperation = 'lighter';
-      const beamGrad = ctx.createRadialGradient(lampX, lampY, 4, lampX, lampY, beamLen);
-      beamGrad.addColorStop(0, 'rgba(224, 242, 254, 0.42)');
-      beamGrad.addColorStop(0.42, 'rgba(125, 211, 252, 0.16)');
-      beamGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
-      ctx.fillStyle = beamGrad;
+      ctx.fillStyle = 'rgba(186, 230, 253, 0.13)';
       ctx.beginPath();
       ctx.moveTo(lampX, lampY);
       ctx.arc(lampX, lampY, beamLen, ang - spread, ang + spread);
       ctx.closePath();
       ctx.fill();
 
-      // Glint on station retro-reflector when inside spotlight cone
+      // Glint ring on station retro-reflector when inside spotlight cone
       const toPortAng = Math.atan2(portY - lampY, portX - lampX);
       const beamDiff = Math.abs(angleDiff(toPortAng, ang));
       if (beamDiff < spread * 0.92 && portX > lampX - 20) {
-        const glintStrength = clamp(1 - beamDiff / (spread * 0.92), 0.15, 1);
-        const glint = ctx.createRadialGradient(portX - 2, portY, 2, portX - 2, portY, 54);
-        glint.addColorStop(0, `rgba(186, 230, 253, ${0.55 * glintStrength})`);
-        glint.addColorStop(0.5, `rgba(56, 189, 248, ${0.22 * glintStrength})`);
-        glint.addColorStop(1, 'rgba(56, 189, 248, 0)');
-        ctx.fillStyle = glint;
+        ctx.strokeStyle = 'rgba(186, 230, 253, 0.65)';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(portX - 2, portY, 54, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.arc(portX - 2, portY, 16, 0, Math.PI * 2);
+        ctx.stroke();
       }
       ctx.restore();
     };
@@ -1676,13 +1432,7 @@ export const dockingGame: GameModule = {
       ctx.lineTo(px, py);
       ctx.stroke();
 
-      // Moving alignment diamond pip with collimated optical glow
-      const pipRgb = readyToLock
-        ? '74, 222, 128'
-        : angErrDeg <= 7 && Math.abs(dy) <= 14
-        ? '56, 189, 248'
-        : '251, 191, 36';
-      drawAdditiveGlow(ctx, px, py, 13, pipRgb, 0.58);
+      // Moving alignment diamond pip
       ctx.fillStyle = readyToLock ? '#4ade80' : angErrDeg <= 7 && Math.abs(dy) <= 14 ? '#38bdf8' : '#fbbf24';
       ctx.beginPath();
       ctx.moveTo(px, py - 5);
@@ -1690,17 +1440,6 @@ export const dockingGame: GameModule = {
       ctx.lineTo(px, py + 5);
       ctx.lineTo(px - 5, py);
       ctx.closePath();
-      ctx.fill();
-
-      // Subtle optical lens specular sheen across COAS glass
-      const lensSheen = ctx.createLinearGradient(-r, -r, r * 0.4, r * 0.4);
-      lensSheen.addColorStop(0, 'rgba(255, 255, 255, 0.14)');
-      lensSheen.addColorStop(0.35, 'rgba(255, 255, 255, 0.02)');
-      lensSheen.addColorStop(0.4, 'rgba(255, 255, 255, 0)');
-      lensSheen.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.fillStyle = lensSheen;
-      ctx.beginPath();
-      ctx.arc(0, 0, r + 4, 0, Math.PI * 2);
       ctx.fill();
 
       // Compact title pill & readiness badge
@@ -1774,17 +1513,25 @@ export const dockingGame: GameModule = {
         ctx.translate((Math.random() - 0.5) * mag * 2, (Math.random() - 0.5) * mag * 2);
       }
 
-      // 1. Deep space starfield, IMAX LEO horizon (nightMode in L3 eclipse) & subtle sunlit orbital lens flare
-      stars.draw(ctx, width, height, simTime, -simTime * 3.5, 0);
-      drawEarthHorizon(ctx, width, height, elapsed, {
-        yRatio: 1.78,
-        radiusScale: 1.16,
-        sunPhase: cfg.eclipse ? 2.55 : 0.32,
-        nightMode: levelIndex === 2,
-        darken: levelIndex === 2 ? 0.34 : 0.2,
-      });
-      if (!cfg.eclipse) {
-        drawSunLensFlare(ctx, width * 0.13, height * 0.17, 26, 0.72);
+      // 1. Baked Opaque LEO Backdrop (1 integer drawImage when cached; fallback to starfield + horizon)
+      if (
+        !drawBakedBackdrop(
+          ctx,
+          levelIndex === 2 ? 'earth-night' : 'leo-earth',
+          width,
+          height,
+          levelIndex === 2 ? 0.34 : 0.2,
+          0.32
+        )
+      ) {
+        stars.draw(ctx, width, height, simTime, -simTime * 3.5, 0);
+        drawEarthHorizon(ctx, width, height, elapsed, {
+          yRatio: 1.78,
+          radiusScale: 1.16,
+          sunPhase: cfg.eclipse ? 2.55 : 0.32,
+          nightMode: levelIndex === 2,
+          darken: levelIndex === 2 ? 0.34 : 0.2,
+        });
       }
 
       const portX = layout.portX;

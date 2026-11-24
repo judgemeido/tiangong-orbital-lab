@@ -150,20 +150,19 @@ button {
   pointer-events: none;
   z-index: -1;
   overflow: visible;
-  --arwes-frames-bg-color: var(--arwes-bg, rgba(6, 14, 28, 0.9));
+  --arwes-frames-bg-color: var(--arwes-bg, rgba(6, 14, 28, 0.92));
   --arwes-frames-bg-stroke: none;
-  --arwes-frames-line-color: var(--arwes-line, rgba(0, 216, 255, 0.72));
-  --arwes-frames-line-filter: drop-shadow(0 0 6px var(--arwes-glow, rgba(0, 216, 255, 0.42)));
+  --arwes-frames-line-color: var(--arwes-line, rgba(0, 216, 255, 0.78));
+  --arwes-frames-line-filter: none;
   --arwes-frames-deco-color: var(--arwes-deco, rgba(0, 216, 255, 0.92));
 }
 
 .arwes-frame-svg [data-name='bg'] {
-  fill: var(--arwes-bg, rgba(6, 14, 28, 0.9));
+  fill: var(--arwes-bg, rgba(6, 14, 28, 0.92));
 }
 
 .arwes-frame-svg [data-name='line'] {
-  stroke: var(--arwes-line, rgba(0, 216, 255, 0.72));
-  filter: drop-shadow(0 0 6px var(--arwes-glow, rgba(0, 216, 255, 0.42)));
+  stroke: var(--arwes-line, rgba(0, 216, 255, 0.78));
 }
 
 .arwes-frame-svg [data-name='deco'] {
@@ -196,5 +195,13 @@ button {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Performance profile rules kept for compact layout; heavy CSS blur/drop-shadow removed globally */
+@media (max-width: 1440px), (max-height: 800px) {
+  :root {
+    --dock-height: 48px;
+    --hud-inset: 9px;
   }
 }

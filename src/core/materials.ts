@@ -1,4 +1,6 @@
 import { clamp } from './canvas-utils';
+import { getModelSprite } from './model-sprites';
+import { isLowPerf } from './perf-profile';
 
 /**
  * Aerospace PBR-Like Procedural Material, Texture & Cinema Backdrop Engine
@@ -17,6 +19,9 @@ const BACKDROP_PATHS: Record<BackdropId, string> = {
 
 const imageCache = new Map<BackdropId, HTMLImageElement>();
 const imageLoaded = new Set<BackdropId>();
+const glowSpriteCache = new Map<string, HTMLCanvasElement>();
+const bakedBackdropCache = new Map<string, HTMLCanvasElement>();
+const MAX_BAKED_BACKDROPS = 4;
 
 export function preloadAerospaceAssets(): void {
   (Object.keys(BACKDROP_PATHS) as BackdropId[]).forEach((id) => {
@@ -79,6 +84,72 @@ export function drawBackdropImage(
   return true;
 }
 
+/**
+ * Ultra-low-GPU pre-baked 1:1 static backdrop cache:
+ * Composites the JPEG + dark tint + radial vignette ONCE per (id, width, height) onto an opaque
+ * offscreen canvas, so every 60fps animation frame is 1 single 1:1 integer pixel copy (`drawImage`).
+ */
+export function drawBakedBackdrop(
+  ctx: CanvasRenderingContext2D,
+  id: BackdropId,
+  w: number,
+  h: number,
+  darken = 0.2,
+  vignette = 0.3
+): boolean {
+  const img = imageCache.get(id);
+  if (!img || !imageLoaded.has(id) || img.naturalWidth === 0) return false;
+
+  const cw = Math.max(1, Math.floor(w));
+  const ch = Math.max(1, Math.floor(h));
+  const dk = Math.round(clamp(darken, 0, 0.92) * 20);
+  const vk = Math.round(clamp(vignette, 0, 0.9) * 20);
+  const key = `${id}_${cw}x${ch}_${dk}_${vk}`;
+
+  let baked = bakedBackdropCache.get(key);
+  if (baked) {
+    // Refresh LRU order
+    bakedBackdropCache.delete(key);
+    bakedBackdropCache.set(key, baked);
+    ctx.drawImage(baked, 0, 0, w, h);
+    return true;
+  }
+
+  baked = document.createElement('canvas');
+  baked.width = cw;
+  baked.height = ch;
+  const bctx = baked.getContext('2d', { alpha: false })!;
+  bctx.fillStyle = '#030711';
+  bctx.fillRect(0, 0, cw, ch);
+
+  const imgRatio = img.naturalWidth / img.naturalHeight;
+  const boxRatio = cw / ch;
+  let dw = cw;
+  let dh = ch;
+  if (imgRatio > boxRatio) {
+    dw = ch * imgRatio;
+  } else {
+    dh = cw / imgRatio;
+  }
+  bctx.drawImage(img, (cw - dw) * 0.5, (ch - dh) * 0.5, dw, dh);
+
+  if (dk > 0) {
+    bctx.fillStyle = `rgba(3, 7, 18, ${(dk / 20).toFixed(2)})`;
+    bctx.fillRect(0, 0, cw, ch);
+  }
+  if (vk > 0) {
+    drawCinematicVignette(bctx, cw, ch, vk / 20);
+  }
+
+  if (bakedBackdropCache.size >= MAX_BAKED_BACKDROPS) {
+    const oldestKey = bakedBackdropCache.keys().next().value;
+    if (oldestKey !== undefined) bakedBackdropCache.delete(oldestKey);
+  }
+  bakedBackdropCache.set(key, baked);
+  ctx.drawImage(baked, 0, 0, w, h);
+  return true;
+}
+
 // ---------------- Cached Procedural Offscreen Surface Textures ----------------
 
 let mliCanvas: HTMLCanvasElement | null = null;
@@ -106,14 +177,14 @@ function buildMLICanvas(): HTMLCanvasElement {
   g.fillRect(0, 0, size, size);
 
   // Faceted crinkle triangles simulating real gold Kapton blanket reflections
-  const cell = 12;
+  const cell = 8;
   const pts: { x: number; y: number }[][] = [];
   const cols = size / cell;
   for (let y = 0; y <= cols; y++) {
     pts[y] = [];
     for (let x = 0; x <= cols; x++) {
-      const jx = x === 0 || x === cols ? 0 : (rand() - 0.5) * 7;
-      const jy = y === 0 || y === cols ? 0 : (rand() - 0.5) * 7;
+      const jx = x === 0 || x === cols ? 0 : (rand() - 0.5) * 5;
+      const jy = y === 0 || y === cols ? 0 : (rand() - 0.5) * 5;
       pts[y][x] = { x: x * cell + jx, y: y * cell + jy };
     }
   }
@@ -188,24 +259,83 @@ function buildCarbonCanvas(): HTMLCanvasElement {
   return c;
 }
 
+interface CtxPatternCache {
+  mliReal?: CanvasPattern | null;
+  mliProc?: CanvasPattern | null;
+  titanium?: CanvasPattern | null;
+  carbon?: CanvasPattern | null;
+}
+
+const patternCacheMap = new WeakMap<CanvasRenderingContext2D, CtxPatternCache>();
+const vignetteCacheMap = new Map<number, HTMLCanvasElement>();
+
+function getPatternBucket(ctx: CanvasRenderingContext2D): CtxPatternCache {
+  let bucket = patternCacheMap.get(ctx);
+  if (!bucket) {
+    bucket = {};
+    patternCacheMap.set(ctx, bucket);
+  }
+  return bucket;
+}
+
 export function getMLIPattern(ctx: CanvasRenderingContext2D): CanvasPattern | null {
-  if (!mliCanvas) mliCanvas = buildMLICanvas();
-  return ctx.createPattern(mliCanvas, 'repeat');
+  const bucket = getPatternBucket(ctx);
+  const realMli = getModelSprite('mli-gold-real');
+  if (realMli) {
+    if (bucket.mliReal === undefined) {
+      bucket.mliReal = ctx.createPattern(realMli, 'repeat');
+    }
+    return bucket.mliReal;
+  }
+  if (bucket.mliProc === undefined) {
+    if (!mliCanvas) mliCanvas = buildMLICanvas();
+    bucket.mliProc = ctx.createPattern(mliCanvas, 'repeat');
+  }
+  return bucket.mliProc;
 }
 
 export function getTitaniumPattern(ctx: CanvasRenderingContext2D): CanvasPattern | null {
-  if (!titaniumCanvas) titaniumCanvas = buildTitaniumCanvas();
-  return ctx.createPattern(titaniumCanvas, 'repeat');
+  const bucket = getPatternBucket(ctx);
+  if (bucket.titanium === undefined) {
+    if (!titaniumCanvas) titaniumCanvas = buildTitaniumCanvas();
+    bucket.titanium = ctx.createPattern(titaniumCanvas, 'repeat');
+  }
+  return bucket.titanium;
 }
 
 export function getCarbonPattern(ctx: CanvasRenderingContext2D): CanvasPattern | null {
-  if (!carbonCanvas) carbonCanvas = buildCarbonCanvas();
-  return ctx.createPattern(carbonCanvas, 'repeat');
+  const bucket = getPatternBucket(ctx);
+  if (bucket.carbon === undefined) {
+    if (!carbonCanvas) carbonCanvas = buildCarbonCanvas();
+    bucket.carbon = ctx.createPattern(carbonCanvas, 'repeat');
+  }
+  return bucket.carbon;
 }
 
 // ---------------- Volumetric Lighting, Bloom & Hard-Surface Renderers ----------------
 
-/** Multi-pass additive bloom glow (creates genuine optical radiance instead of flat circles) */
+/** Cached 32x32 radial halo sprite per RGB tuple (zero per-frame gradients or 'lighter' passes) */
+function getGlowSprite(colorRgb: string): HTMLCanvasElement {
+  let tex = glowSpriteCache.get(colorRgb);
+  if (tex) return tex;
+
+  const s = 32;
+  tex = document.createElement('canvas');
+  tex.width = s;
+  tex.height = s;
+  const gctx = tex.getContext('2d')!;
+  const g = gctx.createRadialGradient(s * 0.5, s * 0.5, 0, s * 0.5, s * 0.5, s * 0.5);
+  g.addColorStop(0, `rgba(${colorRgb}, 1)`);
+  g.addColorStop(0.35, `rgba(${colorRgb}, 0.42)`);
+  g.addColorStop(0.72, `rgba(${colorRgb}, 0.1)`);
+  g.addColorStop(1, `rgba(${colorRgb}, 0)`);
+  gctx.fillStyle = g;
+  gctx.fillRect(0, 0, s, s);
+  glowSpriteCache.set(colorRgb, tex);
+  return tex;
+}
+
+/** Ultra-fast cached sprite halo in 'source-over' (zero GPU gradient allocations or blend-mode flushes) */
 export function drawAdditiveGlow(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -214,21 +344,17 @@ export function drawAdditiveGlow(
   colorRgb: string,
   alpha = 0.65
 ): void {
+  if (radius <= 0.5 || alpha <= 0.01) return;
+  if (isLowPerf() && radius < 18 && alpha < 0.55) return;
+
+  const tex = getGlowSprite(colorRgb);
   ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  const g = ctx.createRadialGradient(x, y, 0, x, y, radius);
-  g.addColorStop(0, `rgba(${colorRgb}, ${clamp(alpha, 0, 1)})`);
-  g.addColorStop(0.32, `rgba(${colorRgb}, ${clamp(alpha * 0.42, 0, 1)})`);
-  g.addColorStop(0.7, `rgba(${colorRgb}, ${clamp(alpha * 0.1, 0, 1)})`);
-  g.addColorStop(1, `rgba(${colorRgb}, 0)`);
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.globalAlpha = clamp(alpha * 0.72, 0, 0.75);
+  ctx.drawImage(tex, x - radius, y - radius, radius * 2, radius * 2);
   ctx.restore();
 }
 
-/** Cinematic orbital sun with anamorphic streak flare & diffraction halo */
+/** Lightweight orbital sun disc (zero gradients, zero anamorphic streaks) */
 export function drawSunLensFlare(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -236,41 +362,21 @@ export function drawSunLensFlare(
   radius: number,
   intensity = 1
 ): void {
+  if (isLowPerf()) return;
   ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-
-  // Broad warm corona
-  drawAdditiveGlow(ctx, x, y, radius * 5.2, '255, 190, 90', 0.34 * intensity);
-  drawAdditiveGlow(ctx, x, y, radius * 2.4, '255, 232, 165', 0.62 * intensity);
-  drawAdditiveGlow(ctx, x, y, radius * 1.15, '255, 252, 240', 0.95 * intensity);
-
-  // Horizontal anamorphic blue-gold streak
-  const streakW = radius * 9;
-  const streak = ctx.createLinearGradient(x - streakW, y, x + streakW, y);
-  streak.addColorStop(0, 'rgba(120, 210, 255, 0)');
-  streak.addColorStop(0.38, `rgba(140, 220, 255, ${(0.18 * intensity).toFixed(3)})`);
-  streak.addColorStop(0.5, `rgba(255, 248, 225, ${(0.55 * intensity).toFixed(3)})`);
-  streak.addColorStop(0.62, `rgba(140, 220, 255, ${(0.18 * intensity).toFixed(3)})`);
-  streak.addColorStop(1, 'rgba(120, 210, 255, 0)');
-  ctx.fillStyle = streak;
-  ctx.fillRect(x - streakW, y - Math.max(1.5, radius * 0.12), streakW * 2, Math.max(3, radius * 0.24));
-
-  // Subtle diffraction hex ring
-  ctx.strokeStyle = `rgba(255, 225, 160, ${(0.18 * intensity).toFixed(3)})`;
-  ctx.lineWidth = 1.2;
+  ctx.fillStyle = `rgba(255, 210, 120, ${(0.22 * intensity).toFixed(3)})`;
   ctx.beginPath();
-  ctx.arc(x, y, radius * 2.9, 0, Math.PI * 2);
-  ctx.stroke();
-
+  ctx.arc(x, y, radius * 2.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = `rgba(255, 248, 225, ${(0.88 * intensity).toFixed(3)})`;
+  ctx.beginPath();
+  ctx.arc(x, y, radius * 0.75, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
 /**
- * Photorealistic cylindrical spacecraft/station module with:
- * - Multi-stop cylindrical metallic shading (specular highlight ridge + orbital rim light)
- * - Brushed titanium surface micro-grain overlay
- * - Structural bulkheads, recessed seams & precision rivets
- * - Optional crinkled gold MLI thermal insulation bands
+ * Lightweight cylindrical spacecraft/station module without shadowBlur, clip(), or full-rect grain passes.
  */
 export function drawTitaniumModule(
   ctx: CanvasRenderingContext2D,
@@ -281,7 +387,7 @@ export function drawTitaniumModule(
   options?: {
     vertical?: boolean;
     radius?: number;
-    mliBands?: number[]; // normalized 0..1 offsets for gold MLI foil wraps
+    mliBands?: number[];
     rivets?: boolean;
     rimGlow?: string;
   }
@@ -290,133 +396,59 @@ export function drawTitaniumModule(
   const r = options?.radius ?? 8;
 
   ctx.save();
-
-  // Subtle ambient shadow behind hull
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
-  ctx.shadowBlur = 14;
-  ctx.shadowOffsetY = 5;
-
   const grad = vertical
     ? ctx.createLinearGradient(x, y, x + w, y)
     : ctx.createLinearGradient(x, y, x, y + h);
 
-  // Realistic sunlit cylinder falloff (specular band at 22%, soft titanium midtone, deep terminator shadow, subtle earth-albedo bounce at 94%)
   grad.addColorStop(0, '#9fb6d1');
-  grad.addColorStop(0.14, '#eef5fc');
-  grad.addColorStop(0.24, '#ffffff');
-  grad.addColorStop(0.46, '#b7c9de');
-  grad.addColorStop(0.76, '#506784');
-  grad.addColorStop(0.92, '#22334b');
-  grad.addColorStop(1, '#365578'); // Earth blue albedo rim bounce!
+  grad.addColorStop(0.22, '#ffffff');
+  grad.addColorStop(0.5, '#b7c9de');
+  grad.addColorStop(0.85, '#3b516e');
+  grad.addColorStop(1, '#365578');
 
   ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
   ctx.fill();
 
-  ctx.shadowColor = 'transparent';
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetY = 0;
-
-  // Clip interior details strictly to module silhouette
-  ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-  ctx.clip();
-
-  // Brushed metal surface micro-grain
-  const grain = getTitaniumPattern(ctx);
-  if (grain) {
-    ctx.fillStyle = grain;
-    ctx.fillRect(x, y, w, h);
-  }
-
-  // Optional Crinkled Gold MLI Thermal Foil bands
+  // Flat gold Kapton MLI bands without clip/pattern allocations
   if (options?.mliBands && options.mliBands.length > 0) {
-    const mli = getMLIPattern(ctx);
+    ctx.fillStyle = 'rgba(217, 148, 28, 0.78)';
     for (const pos of options.mliBands) {
-      if (mli) {
-        ctx.fillStyle = mli;
-        if (vertical) {
-          const by = y + h * pos;
-          const bh = Math.max(10, h * 0.11);
-          ctx.fillRect(x, by, w, bh);
-          // Cylindrical shadow wrap over gold foil
-          const wrap = ctx.createLinearGradient(x, by, x + w, by);
-          wrap.addColorStop(0, 'rgba(255,245,200,0.22)');
-          wrap.addColorStop(0.25, 'rgba(255,255,255,0.28)');
-          wrap.addColorStop(0.8, 'rgba(15,10,2,0.52)');
-          wrap.addColorStop(1, 'rgba(30,55,95,0.35)');
-          ctx.fillStyle = wrap;
-          ctx.fillRect(x, by, w, bh);
-        } else {
-          const bx = x + w * pos;
-          const bw = Math.max(12, w * 0.1);
-          ctx.fillRect(bx, y, bw, h);
-          const wrap = ctx.createLinearGradient(bx, y, bx, y + h);
-          wrap.addColorStop(0, 'rgba(255,245,200,0.22)');
-          wrap.addColorStop(0.24, 'rgba(255,255,255,0.3)');
-          wrap.addColorStop(0.8, 'rgba(15,10,2,0.55)');
-          wrap.addColorStop(1, 'rgba(30,55,95,0.35)');
-          ctx.fillStyle = wrap;
-          ctx.fillRect(bx, y, bw, h);
-        }
-      }
-    }
-  }
-
-  // Embossed panel seam lines (dark groove + bright highlight edge)
-  const step = vertical ? 30 : 38;
-  const limit = vertical ? h : w;
-  for (let d = step; d < limit - 10; d += step) {
-    ctx.strokeStyle = 'rgba(8, 16, 30, 0.42)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    if (vertical) {
-      ctx.moveTo(x, y + d);
-      ctx.lineTo(x + w, y + d);
-    } else {
-      ctx.moveTo(x + d, y);
-      ctx.lineTo(x + d, y + h);
-    }
-    ctx.stroke();
-
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.34)';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    if (vertical) {
-      ctx.moveTo(x, y + d + 1.2);
-      ctx.lineTo(x + w, y + d + 1.2);
-    } else {
-      ctx.moveTo(x + d + 1.2, y);
-      ctx.lineTo(x + d + 1.2, y + h);
-    }
-    ctx.stroke();
-
-    if (options?.rivets !== false) {
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
       if (vertical) {
-        ctx.fillRect(x + 6, y + d - 4, 2, 2);
-        ctx.fillRect(x + w - 8, y + d - 4, 2, 2);
+        ctx.fillRect(x + 1, y + h * pos, Math.max(0, w - 2), Math.max(8, h * 0.1));
       } else {
-        ctx.fillRect(x + d - 4, y + 6, 2, 2);
-        ctx.fillRect(x + d - 4, y + h - 8, 2, 2);
+        ctx.fillRect(x + w * pos, y + 1, Math.max(10, w * 0.1), Math.max(0, h - 2));
       }
     }
   }
-  ctx.restore();
 
-  // Crisp metallic outer rim stroke
+  // Subtle seam strokes
+  const step = vertical ? 32 : 40;
+  const limit = vertical ? h : w;
+  ctx.strokeStyle = 'rgba(8, 16, 30, 0.36)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let d = step; d < limit - 10; d += step) {
+    if (vertical) {
+      ctx.moveTo(x + 1, y + d);
+      ctx.lineTo(x + w - 1, y + d);
+    } else {
+      ctx.moveTo(x + d, y + 1);
+      ctx.lineTo(x + d, y + h - 1);
+    }
+  }
+  ctx.stroke();
+
   ctx.strokeStyle = options?.rimGlow ?? 'rgba(226, 240, 255, 0.65)';
-  ctx.lineWidth = 1.25;
+  ctx.lineWidth = 1.2;
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
   ctx.stroke();
-
   ctx.restore();
 }
 
-/** Recessed optical glass viewport with metallic bezel & diagonal specular reflection */
+/** Lightweight optical glass viewport bezel without clip() or gradient sheen */
 export function drawGlassViewport(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -428,59 +460,38 @@ export function drawGlassViewport(
 ): void {
   ctx.save();
   ctx.fillStyle = tintColor;
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, radius);
-  ctx.fill();
-
-  // Diagonal curved glass specular highlight
-  ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, radius);
-  ctx.clip();
-
-  const sheen = ctx.createLinearGradient(x, y, x + w * 0.65, y + h * 0.65);
-  sheen.addColorStop(0, 'rgba(255, 255, 255, 0.28)');
-  sheen.addColorStop(0.28, 'rgba(255, 255, 255, 0.06)');
-  sheen.addColorStop(0.32, 'rgba(255, 255, 255, 0)');
-  sheen.addColorStop(1, 'rgba(255, 255, 255, 0)');
-  ctx.fillStyle = sheen;
-  ctx.fillRect(x, y, w, h);
-
-  // Subtle recessed inner bevel shadow
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
-  ctx.lineWidth = 2.5;
-  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-  ctx.restore();
-
-  // Crisp metallic outer bezel
   ctx.strokeStyle = 'rgba(148, 197, 255, 0.55)';
   ctx.lineWidth = 1.2;
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, radius);
+  ctx.fill();
   ctx.stroke();
   ctx.restore();
 }
 
-/** Subtle cinema-grade edge vignette + micro-HUD atmosphere to unify Canvas & Sci-Fi UI */
+/** Subtle cinema-grade edge vignette cached into a compact offscreen texture (zero per-frame gradient allocation) */
 export function drawCinematicVignette(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
   strength = 0.38
 ): void {
-  ctx.save();
-  const vig = ctx.createRadialGradient(
-    w * 0.5,
-    h * 0.48,
-    Math.min(w, h) * 0.34,
-    w * 0.5,
-    h * 0.5,
-    Math.max(w, h) * 0.78
-  );
-  vig.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  vig.addColorStop(0.75, `rgba(2, 6, 16, ${(strength * 0.45).toFixed(3)})`);
-  vig.addColorStop(1, `rgba(2, 5, 14, ${strength.toFixed(3)})`);
-  ctx.fillStyle = vig;
-  ctx.fillRect(0, 0, w, h);
-  ctx.restore();
+  const key = Math.round(clamp(strength, 0.05, 0.9) * 20);
+  let vigCanvas = vignetteCacheMap.get(key);
+  if (!vigCanvas) {
+    const s = 256;
+    vigCanvas = document.createElement('canvas');
+    vigCanvas.width = s;
+    vigCanvas.height = s;
+    const vctx = vigCanvas.getContext('2d')!;
+    const st = key / 20;
+    const vig = vctx.createRadialGradient(s * 0.5, s * 0.48, s * 0.28, s * 0.5, s * 0.5, s * 0.72);
+    vig.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vig.addColorStop(0.75, `rgba(2, 6, 16, ${(st * 0.45).toFixed(3)})`);
+    vig.addColorStop(1, `rgba(2, 5, 14, ${st.toFixed(3)})`);
+    vctx.fillStyle = vig;
+    vctx.fillRect(0, 0, s, s);
+    vignetteCacheMap.set(key, vigCanvas);
+  }
+  ctx.drawImage(vigCanvas, 0, 0, w, h);
 }

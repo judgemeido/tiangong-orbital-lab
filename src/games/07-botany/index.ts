@@ -8,11 +8,8 @@ import {
   StarfieldRenderer,
 } from '../../core/canvas-utils';
 import {
-  drawAdditiveGlow,
-  drawBackdropImage,
-  drawCinematicVignette,
-  drawGlassViewport,
-  getTitaniumPattern,
+  drawBakedBackdrop,
+  getMLIPattern,
 } from '../../core/materials';
 import type {
   GameHostAPI,
@@ -278,8 +275,9 @@ export const botanyGame: GameModule = {
     }
 
     function getCabinetRect(w: number, h: number): CabinetRect {
-      const topSafe = Math.max(122, h * 0.16);
-      const bottomSafe = Math.min(h - 138, h * 0.855);
+      const compact = h <= 720;
+      const topSafe = compact ? Math.max(100, h * 0.15) : Math.max(122, h * 0.16);
+      const bottomSafe = Math.min(h - (compact ? 86 : 138), h * 0.875);
       const availH = Math.max(245, bottomSafe - topSafe);
       const cabW = clamp(w * 0.58, 430, 740);
       const cabH = clamp(availH, 245, 500);
@@ -1040,68 +1038,24 @@ export const botanyGame: GameModule = {
 
     function drawScene(): void {
       const { width: w, height: h } = hi.getSize();
-      starfield.draw(ctx, w, h, elapsed, elapsed * 2, elapsed * 0.8);
-      drawBackdropImage(ctx, 'lab-interior', w, h, { alpha: 0.94, darken: 0.22 });
-      drawCinematicVignette(ctx, w, h, 0.34);
+      if (!drawBakedBackdrop(ctx, 'lab-interior', w, h, 0.22, 0.34)) {
+        starfield.draw(ctx, w, h, elapsed, elapsed * 2, elapsed * 0.8);
+      }
 
       const cab = getCabinetRect(w, h);
 
-      // Subtle exterior orbital cabinet glow
       ctx.save();
-      const outerGlow = ctx.createRadialGradient(
-        cab.x + cab.w * 0.5,
-        cab.y + cab.h * 0.45,
-        cab.w * 0.1,
-        cab.x + cab.w * 0.5,
-        cab.y + cab.h * 0.5,
-        cab.w * 0.72
-      );
-      outerGlow.addColorStop(0, 'rgba(74, 222, 128, 0.1)');
-      outerGlow.addColorStop(1, 'rgba(5, 10, 20, 0)');
-      ctx.fillStyle = outerGlow;
-      ctx.fillRect(0, 0, w, h);
 
-      // ---- 1. Wentian Cabinet Brushed-Titanium Outer Chassis ----
-      ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.62)';
-      ctx.shadowBlur = 24;
-      ctx.shadowOffsetY = 8;
-      const chassisGrad = ctx.createLinearGradient(cab.x, cab.y, cab.x + cab.w, cab.y + cab.h);
-      chassisGrad.addColorStop(0, '#3a4b63');
-      chassisGrad.addColorStop(0.22, '#223147');
-      chassisGrad.addColorStop(0.55, '#2b3c54');
-      chassisGrad.addColorStop(1, '#121c2e');
-
-      ctx.fillStyle = chassisGrad;
+      // ---- 1. Wentian Cabinet Outer Chassis (flat dark-slate fill, zero clip/gradients) ----
+      ctx.fillStyle = '#1b283c';
       ctx.beginPath();
       ctx.roundRect(cab.x, cab.y, cab.w, cab.h, 14);
       ctx.fill();
-      ctx.restore();
-
-      // Brushed titanium micro-grain & anodized chamfer highlights clipped to chassis
-      ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(cab.x, cab.y, cab.w, cab.h, 14);
-      ctx.clip();
-      const tiPattern = getTitaniumPattern(ctx);
-      if (tiPattern) {
-        ctx.fillStyle = tiPattern;
-        ctx.fillRect(cab.x, cab.y, cab.w, cab.h);
-      }
-      const topBevel = ctx.createLinearGradient(cab.x, cab.y, cab.x, cab.y + 22);
-      topBevel.addColorStop(0, 'rgba(255, 255, 255, 0.16)');
-      topBevel.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.fillStyle = topBevel;
-      ctx.fillRect(cab.x, cab.y, cab.w, 22);
-      ctx.restore();
-
       ctx.strokeStyle = 'rgba(186, 218, 255, 0.45)';
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(cab.x, cab.y, cab.w, cab.h, 14);
       ctx.stroke();
 
-      // Machined stainless mounting bolts with specular depth
+      // Machined stainless mounting bolts (flat circles)
       const boltOff = 12;
       const bolts = [
         [cab.x + boltOff, cab.y + boltOff],
@@ -1110,11 +1064,7 @@ export const botanyGame: GameModule = {
         [cab.x + cab.w - boltOff, cab.y + cab.h - boltOff],
       ];
       for (const [bx, by] of bolts) {
-        const bGrad = ctx.createRadialGradient(bx - 1, by - 1, 0.5, bx, by, 3.8);
-        bGrad.addColorStop(0, '#f1f5f9');
-        bGrad.addColorStop(0.55, '#64748b');
-        bGrad.addColorStop(1, '#1e293b');
-        ctx.fillStyle = bGrad;
+        ctx.fillStyle = '#64748b';
         ctx.beginPath();
         ctx.arc(bx, by, 3.6, 0, Math.PI * 2);
         ctx.fill();
@@ -1141,21 +1091,12 @@ export const botanyGame: GameModule = {
       );
       ctx.textAlign = 'left';
 
-      // ---- 2. Cabinet Interior Chamber Background ----
-      const innerGrad = ctx.createLinearGradient(cab.innerX, cab.innerY, cab.innerX, cab.trayY);
-      innerGrad.addColorStop(0, '#0c182c');
-      innerGrad.addColorStop(0.5, '#0b1424');
-      innerGrad.addColorStop(1, '#101d31');
-      ctx.fillStyle = innerGrad;
+      // ---- 2. Cabinet Interior Chamber Background (flat deep slate, zero gradient/clip) ----
+      ctx.fillStyle = '#0c1626';
       ctx.beginPath();
       ctx.roundRect(cab.innerX, cab.innerY, cab.innerW, cab.innerH, 8);
       ctx.fill();
-
-      // Clip interior drawings inside glass chamber
       ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(cab.innerX, cab.innerY, cab.innerW, cab.innerH, 8);
-      ctx.clip();
 
       // Subtle metallic interior grid lines
       ctx.strokeStyle = 'rgba(148, 185, 235, 0.06)';
@@ -1214,7 +1155,7 @@ export const botanyGame: GameModule = {
         ctx.restore();
       }
 
-      // ---- 4. Volumetric LED Light Cone (450nm Blue <-> 660nm Red) ----
+      // ---- 4. Flat Translucent LED Light Cone (450nm Blue <-> 660nm Red, zero gradients/lighter) ----
       const lampX = cab.innerX + lampXNorm * cab.innerW;
       const lampW = Math.min(136, cab.innerW * 0.24);
       const rCol = Math.round(lerp(56, 244, redRatio));
@@ -1222,56 +1163,24 @@ export const botanyGame: GameModule = {
       const bCol = Math.round(lerp(246, 118, redRatio));
       const specRgb = `${rCol}, ${gCol}, ${bCol}`;
 
-      // Additive upper volumetric dispersion radiance from grow-light array
-      drawAdditiveGlow(ctx, lampX, cab.railY + 26, lampW * 1.25, specRgb, 0.38);
-      drawAdditiveGlow(
-        ctx,
-        lampX - lampW * 0.24,
-        cab.railY + 22,
-        lampW * 0.65,
-        '59, 130, 246',
-        0.26 * (1 - redRatio * 0.65)
-      );
-      drawAdditiveGlow(
-        ctx,
-        lampX + lampW * 0.24,
-        cab.railY + 22,
-        lampW * 0.65,
-        '244, 63, 94',
-        0.26 * (0.25 + redRatio * 0.75)
-      );
-
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const coneGrad = ctx.createLinearGradient(lampX, cab.railY + 14, lampX, cab.trayY);
-      coneGrad.addColorStop(0, `rgba(${specRgb}, 0.44)`);
-      coneGrad.addColorStop(0.48, `rgba(${specRgb}, 0.18)`);
-      coneGrad.addColorStop(0.85, `rgba(${specRgb}, 0.06)`);
-      coneGrad.addColorStop(1, `rgba(${specRgb}, 0.01)`);
-
-      ctx.fillStyle = coneGrad;
+      ctx.fillStyle = `rgba(${specRgb}, 0.14)`;
       ctx.beginPath();
-      ctx.moveTo(lampX - lampW * 0.44, cab.railY + 18);
-      ctx.lineTo(lampX + lampW * 0.44, cab.railY + 18);
-      ctx.lineTo(lampX + lampW * 1.48, cab.trayY + 4);
-      ctx.lineTo(lampX - lampW * 1.48, cab.trayY + 4);
+      ctx.moveTo(Math.max(cab.innerX + 2, lampX - lampW * 0.44), cab.railY + 18);
+      ctx.lineTo(Math.min(cab.innerX + cab.innerW - 2, lampX + lampW * 0.44), cab.railY + 18);
+      ctx.lineTo(Math.min(cab.innerX + cab.innerW - 2, lampX + lampW * 1.48), cab.trayY);
+      ctx.lineTo(Math.max(cab.innerX + 2, lampX - lampW * 1.48), cab.trayY);
       ctx.closePath();
       ctx.fill();
 
-      // Inner focused photon beam core
-      const coreCone = ctx.createLinearGradient(lampX, cab.railY + 18, lampX, cab.trayY);
-      coreCone.addColorStop(0, `rgba(255, 255, 255, 0.16)`);
-      coreCone.addColorStop(0.35, `rgba(${specRgb}, 0.14)`);
-      coreCone.addColorStop(1, `rgba(${specRgb}, 0)`);
-      ctx.fillStyle = coreCone;
+      // Inner photon core trapezoid
+      ctx.fillStyle = `rgba(${specRgb}, 0.11)`;
       ctx.beginPath();
-      ctx.moveTo(lampX - lampW * 0.28, cab.railY + 18);
-      ctx.lineTo(lampX + lampW * 0.28, cab.railY + 18);
-      ctx.lineTo(lampX + lampW * 0.78, cab.trayY + 4);
-      ctx.lineTo(lampX - lampW * 0.78, cab.trayY + 4);
+      ctx.moveTo(Math.max(cab.innerX + 2, lampX - lampW * 0.28), cab.railY + 18);
+      ctx.lineTo(Math.min(cab.innerX + cab.innerW - 2, lampX + lampW * 0.28), cab.railY + 18);
+      ctx.lineTo(Math.min(cab.innerX + cab.innerW - 2, lampX + lampW * 0.78), cab.trayY);
+      ctx.lineTo(Math.max(cab.innerX + 2, lampX - lampW * 0.78), cab.trayY);
       ctx.closePath();
       ctx.fill();
-      ctx.restore();
 
       // ---- 5. Left Wall Micro-Circulation Fan & Right Exhaust + Airflow Streamlines ----
       const fanCx = cab.innerX + 26;
@@ -1357,19 +1266,16 @@ export const botanyGame: GameModule = {
       // ---- 6. Stagnant Boundary-Layer CO2 Halo (behind & around plant leaves) ----
       if (boundaryLayer > 0.16 && nodes.length > 1) {
         ctx.save();
-        const blAlpha = clamp((boundaryLayer - 0.14) * 0.58, 0, 0.5);
+        const blAlpha = clamp((boundaryLayer - 0.14) * 0.42, 0, 0.34);
+        ctx.fillStyle = `rgba(148, 163, 184, ${blAlpha.toFixed(3)})`;
+        ctx.beginPath();
         for (let i = 1; i < nodes.length; i += 2) {
           const sp = plantPosToScreen(cab, nodes[i].xNorm, nodes[i].yNorm);
-          const rHalo = 22 + boundaryLayer * 28 + Math.sin(elapsed * 2 + i) * 3;
-          const halo = ctx.createRadialGradient(sp.x, sp.y, 4, sp.x, sp.y, rHalo);
-          halo.addColorStop(0, `rgba(203, 213, 225, ${blAlpha})`);
-          halo.addColorStop(0.65, `rgba(148, 163, 184, ${blAlpha * 0.55})`);
-          halo.addColorStop(1, 'rgba(148, 163, 184, 0)');
-          ctx.fillStyle = halo;
-          ctx.beginPath();
+          const rHalo = 18 + boundaryLayer * 24 + Math.sin(elapsed * 2 + i) * 2.5;
+          ctx.moveTo(sp.x + rHalo, sp.y);
           ctx.arc(sp.x, sp.y, rHalo, 0, Math.PI * 2);
-          ctx.fill();
         }
+        ctx.fill();
         if (boundaryLayer > 0.45) {
           const mid = nodes[Math.floor(nodes.length * 0.65)];
           const mp = plantPosToScreen(cab, mid.xNorm, mid.yNorm);
@@ -1392,7 +1298,7 @@ export const botanyGame: GameModule = {
       ctx.fillStyle = '#64748b';
       ctx.fillRect(cab.innerX + 12, cab.railY - 1, cab.innerW - 24, 2);
 
-      // Lamp carriage body
+      // Lamp carriage body with anodized titanium & gold MLI accent trim
       ctx.save();
       ctx.fillStyle = draggingLamp || hoverLamp ? '#334155' : '#1e293b';
       ctx.strokeStyle = draggingLamp || hoverLamp ? '#7dd3fc' : '#64748b';
@@ -1402,7 +1308,14 @@ export const botanyGame: GameModule = {
       ctx.fill();
       ctx.stroke();
 
-      // Individual Blue (450nm) & Red (660nm) LED emitter beads with additive optical glow
+      const lampMli = getMLIPattern(ctx);
+      if (lampMli) {
+        ctx.fillStyle = lampMli;
+        ctx.fillRect(lampX - lampW * 0.46, cab.railY - 4, 14, 5);
+        ctx.fillRect(lampX + lampW * 0.46 - 14, cab.railY - 4, 14, 5);
+      }
+
+      // Individual Blue (450nm) & Red (660nm) LED emitter beads (crisp dots, zero additive halos)
       const diodeCount = 9;
       for (let d = 0; d < diodeCount; d++) {
         const t = d / (diodeCount - 1);
@@ -1412,10 +1325,9 @@ export const botanyGame: GameModule = {
         const lum = isRed ? clamp(0.25 + redRatio * 0.9, 0.2, 1) : clamp(0.25 + (1 - redRatio) * 0.9, 0.2, 1);
         const diodeRgb =
           isBlue && !isRed ? '59, 130, 246' : isRed && !isBlue ? '244, 63, 94' : specRgb;
-        drawAdditiveGlow(ctx, dx, cab.railY + 13, 14, diodeRgb, lum * 0.65);
         ctx.fillStyle = `rgba(${diodeRgb}, ${lum})`;
         ctx.beginPath();
-        ctx.arc(dx, cab.railY + 13, 3.3, 0, Math.PI * 2);
+        ctx.arc(dx, cab.railY + 13, 3.6, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
         ctx.beginPath();
@@ -1428,19 +1340,16 @@ export const botanyGame: GameModule = {
       ctx.fillRect(lampX - 10, cab.railY - 2, 20, 3);
       ctx.restore();
 
-      // ---- 10. Floating Surface-Tension Water Globules with 3D Specular Glints & Caustics ----
+      // ---- 10. Floating Surface-Tension Water Globules (flat aqua body + crisp specular highlight, zero gradients) ----
       for (const g of globules) {
         const p = plantPosToScreen(cab, g.xNorm, g.yNorm);
         const isHov = g.id === hoverGlobuleId;
         ctx.save();
         ctx.translate(p.x, p.y);
 
-        // Soft refractive aqua halo around floating zero-G droplet
-        drawAdditiveGlow(ctx, 0, 0, g.radius * 1.75, '56, 189, 248', isHov ? 0.44 : 0.25);
-
         // Organic surface-tension wobble contour
         ctx.beginPath();
-        const pts = 24;
+        const pts = 18;
         for (let i = 0; i <= pts; i++) {
           const ang = (i / pts) * Math.PI * 2;
           const wob =
@@ -1455,41 +1364,18 @@ export const botanyGame: GameModule = {
         }
         ctx.closePath();
 
-        const gFill = ctx.createRadialGradient(
-          -g.radius * 0.32,
-          -g.radius * 0.34,
-          1.5,
-          0,
-          0,
-          g.radius * 1.15
-        );
-        gFill.addColorStop(0, 'rgba(240, 249, 255, 0.92)');
-        gFill.addColorStop(0.36, 'rgba(56, 189, 248, 0.38)');
-        gFill.addColorStop(0.76, 'rgba(14, 116, 144, 0.56)');
-        gFill.addColorStop(0.93, 'rgba(125, 211, 252, 0.78)');
-        gFill.addColorStop(1, 'rgba(224, 242, 254, 0.96)');
-        ctx.fillStyle = gFill;
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.56)';
         ctx.fill();
 
         ctx.strokeStyle = isHov ? '#fde047' : 'rgba(224, 242, 254, 0.92)';
-        ctx.lineWidth = isHov ? 2.4 : 1.4;
+        ctx.lineWidth = isHov ? 2.4 : 1.5;
         ctx.stroke();
 
-        // Bottom-right internal transmitted caustic focus glow
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.fillStyle = 'rgba(186, 230, 253, 0.48)';
-        ctx.beginPath();
-        ctx.ellipse(g.radius * 0.28, g.radius * 0.34, g.radius * 0.3, g.radius * 0.14, -0.55, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-
-        // Primary glossy 3D specular crescent + crisp pinpoint star glint
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+        // Crisp 3D specular highlight crescent
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
         ctx.beginPath();
         ctx.ellipse(-g.radius * 0.34, -g.radius * 0.32, g.radius * 0.28, g.radius * 0.14, -0.62, 0, Math.PI * 2);
         ctx.fill();
-        drawAdditiveGlow(ctx, -g.radius * 0.36, -g.radius * 0.36, g.radius * 0.55, '255, 255, 255', 0.65);
 
         // Secondary rim bounce dot
         ctx.fillStyle = 'rgba(255, 255, 255, 0.78)';
@@ -1513,36 +1399,14 @@ export const botanyGame: GameModule = {
         drawPhysicsOverlay(cab, lampX, fanCx, fanCy);
       }
 
-      // Subtle curved diagonal optical glass cabinet door reflection streak
-      ctx.save();
-      const diagGlass = ctx.createLinearGradient(
-        cab.innerX,
-        cab.innerY,
-        cab.innerX + cab.innerW * 0.58,
-        cab.innerY + cab.innerH * 0.65
-      );
-      diagGlass.addColorStop(0, 'rgba(255, 255, 255, 0.08)');
-      diagGlass.addColorStop(0.24, 'rgba(255, 255, 255, 0.035)');
-      diagGlass.addColorStop(0.29, 'rgba(255, 255, 255, 0)');
-      diagGlass.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.fillStyle = diagGlass;
-      ctx.beginPath();
-      ctx.moveTo(cab.innerX, cab.innerY);
-      ctx.lineTo(cab.innerX + cab.innerW * 0.52, cab.innerY);
-      ctx.quadraticCurveTo(
-        cab.innerX + cab.innerW * 0.26,
-        cab.innerY + cab.innerH * 0.34,
-        cab.innerX,
-        cab.innerY + cab.innerH * 0.62
-      );
-      ctx.closePath();
-      ctx.fill();
       ctx.restore();
 
-      ctx.restore(); // end interior clip
-
-      // Recessed optical glass viewport bezel & specular sheen over growth chamber
-      drawGlassViewport(ctx, cab.innerX, cab.innerY, cab.innerW, cab.innerH, 8, 'rgba(56, 189, 248, 0.025)');
+      // Crisp growth chamber viewport frame (no linear glass gradient/glassViewport helper)
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.35)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.roundRect(cab.innerX, cab.innerY, cab.innerW, cab.innerH, 8);
+      ctx.stroke();
 
       ctx.restore();
     }
@@ -1616,12 +1480,8 @@ export const botanyGame: GameModule = {
         ctx.translate(p.x, p.y);
         ctx.rotate(side * (-0.42 + droop) + windTilt);
 
-        // Subsurface sunlit gradient across leaf blade
-        const lfGrad = ctx.createLinearGradient(0, -leafWid, side * leafLen, leafWid);
-        lfGrad.addColorStop(0, leafDark);
-        lfGrad.addColorStop(0.45, leafColor);
-        lfGrad.addColorStop(1, `rgba(${Math.min(255, stemR + 65)}, ${Math.min(255, stemG + 40)}, ${Math.min(255, stemB + 35)}, 0.96)`);
-        ctx.fillStyle = lfGrad;
+        // Flat sunlit leaf blade fill (no per-leaf gradient)
+        ctx.fillStyle = leafColor;
         ctx.strokeStyle = leafDark;
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -1631,26 +1491,21 @@ export const botanyGame: GameModule = {
         ctx.fill();
         ctx.stroke();
 
-        // Translucent backlit midrib vein + upper sunlit rim sheen
-        ctx.strokeStyle = `rgba(187, 247, 208, ${(0.35 + photosynRate * 0.4).toFixed(2)})`;
+        // Leaf veins
+        ctx.strokeStyle = `rgba(187, 247, 208, ${(0.38 + photosynRate * 0.42).toFixed(2)})`;
         ctx.lineWidth = 0.9;
         ctx.beginPath();
         ctx.moveTo(side * 2, 0);
         ctx.quadraticCurveTo(side * leafLen * 0.5, -leafWid * 0.18, side * leafLen * 0.88, 0);
+        ctx.moveTo(side * leafLen * 0.32, 0);
+        ctx.lineTo(side * leafLen * 0.5, -leafWid * 0.48);
+        ctx.moveTo(side * leafLen * 0.56, 0);
+        ctx.lineTo(side * leafLen * 0.72, leafWid * 0.44);
         ctx.stroke();
         ctx.restore();
       }
 
-      // Soft backlit photosynthesis canopy radiance around apex
       const tip = pts[pts.length - 1];
-      drawAdditiveGlow(
-        ctx,
-        tip.x,
-        tip.y,
-        36 + growth * 28,
-        levelIndex > 0 && growth > 0.6 ? '250, 204, 21' : '74, 222, 128',
-        0.16 + photosynRate * 0.16
-      );
       if (levelIndex === 0) {
         // Arabidopsis: tiny emerald bud -> 4-petal crisp white blossoms
         if (growth > 0.62) {
@@ -1786,11 +1641,10 @@ export const botanyGame: GameModule = {
 
       // Capillary drip emitter nozzle highlight on pulse
       if (dripPulseAnim > 0) {
-        const g = ctx.createRadialGradient(rootCx, cab.trayY + 8, 2, rootCx, cab.trayY + 12, 48 * dripPulseAnim);
-        g.addColorStop(0, `rgba(56, 189, 248, ${0.7 * dripPulseAnim})`);
-        g.addColorStop(1, 'rgba(56, 189, 248, 0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(cab.innerX, cab.trayY, cab.innerW, cab.trayH);
+        ctx.fillStyle = `rgba(56, 189, 248, ${(0.34 * dripPulseAnim).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(rootCx, cab.trayY + 12, 22 * dripPulseAnim, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       // Top rim divider of tray

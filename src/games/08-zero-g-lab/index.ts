@@ -1,3 +1,4 @@
+import { drawControlGyroscope3D, drawFeitianAstronaut3D } from '../../core/aerospace-models';
 import {
   clamp,
   dist,
@@ -8,12 +9,8 @@ import {
   StarfieldRenderer,
 } from '../../core/canvas-utils';
 import {
-  drawAdditiveGlow,
-  drawBackdropImage,
-  drawCinematicVignette,
-  drawGlassViewport,
+  drawBakedBackdrop,
   getMLIPattern,
-  getTitaniumPattern,
 } from '../../core/materials';
 import type {
   GameHostAPI,
@@ -206,8 +203,9 @@ export const zeroGLabGame: GameModule = {
     }
 
     function getPlayRect(w: number, h: number): SafePlayRect {
-      const topSafe = Math.max(142, h * 0.2);
-      const bottomSafe = Math.min(h - 92, h * 0.87);
+      const compact = h <= 720;
+      const topSafe = compact ? Math.max(104, h * 0.16) : Math.max(142, h * 0.2);
+      const bottomSafe = Math.min(h - (compact ? 76 : 92), h * 0.885);
       const availH = Math.max(240, bottomSafe - topSafe);
       const rectW = clamp(w * 0.72, 460, 880);
       const rectH = clamp(availH, 240, 480);
@@ -1241,41 +1239,28 @@ export const zeroGLabGame: GameModule = {
         // Crisp upward orientation arrow above helmet (makes upright vs inverted instant to read!)
         ctx.strokeStyle = tint;
         ctx.fillStyle = tint;
-        ctx.lineWidth = 2.6;
+        ctx.lineWidth = 2.4;
         ctx.beginPath();
-        ctx.moveTo(0, -10);
-        ctx.lineTo(0, -34);
+        ctx.moveTo(0, -16);
+        ctx.lineTo(0, -35);
         ctx.stroke();
 
         ctx.beginPath();
-        ctx.moveTo(0, -40);
-        ctx.lineTo(-8, -28);
-        ctx.lineTo(8, -28);
+        ctx.moveTo(0, -41);
+        ctx.lineTo(-7, -30);
+        ctx.lineTo(7, -30);
         ctx.closePath();
         ctx.fill();
 
-        // Stylized Taikonaut helmet & gold visor
-        ctx.lineWidth = 2.2;
-        ctx.strokeStyle = tint;
-        ctx.fillStyle = 'rgba(224, 242, 254, 0.22)';
-        ctx.beginPath();
-        ctx.arc(0, 6, 15, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
-        // Visor face plate (distinctly asymmetric vertically)
-        ctx.fillStyle = invertY ? '#f59e0b' : '#38bdf8';
-        ctx.beginPath();
-        ctx.roundRect(-10, -2, 20, 12, 5);
-        ctx.fill();
-
-        // Suit shoulder collar at bottom
-        ctx.strokeStyle = tint;
-        ctx.lineWidth = 2.4;
-        ctx.beginPath();
-        ctx.moveTo(-16, 28);
-        ctx.quadraticCurveTo(0, 18, 16, 28);
-        ctx.stroke();
+        // Sculpted 3D Feitian Astronaut silhouette inside refraction reticle
+        drawFeitianAstronaut3D(ctx, {
+          x: 0,
+          y: 12,
+          scale: 0.78,
+          facing: 1,
+          thermalMode: invertY ? 'heat' : 'cool',
+          suitTemp: invertY ? 31 : 19,
+        });
 
         // Orientation letter marker
         ctx.font = '800 10px "JetBrains Mono", monospace';
@@ -1307,56 +1292,24 @@ export const zeroGLabGame: GameModule = {
     function drawL1(pr: SafePlayRect): void {
       const g = getL1Geometry(pr);
 
-      // Lab bench chamber frame with brushed titanium grain & machined corner bolts
+      // Lab bench chamber frame (flat fill, zero clip/gradients)
       ctx.save();
-      ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.58)';
-      ctx.shadowBlur = 24;
-      ctx.shadowOffsetY = 8;
-      const panelGrad = ctx.createLinearGradient(pr.x, pr.y, pr.x, pr.y + pr.h);
-      panelGrad.addColorStop(0, 'rgba(18, 32, 58, 0.91)');
-      panelGrad.addColorStop(0.55, 'rgba(10, 20, 40, 0.94)');
-      panelGrad.addColorStop(1, 'rgba(7, 14, 29, 0.96)');
-      ctx.fillStyle = panelGrad;
+      ctx.fillStyle = 'rgba(11, 20, 40, 0.94)';
       ctx.beginPath();
       ctx.roundRect(pr.x, pr.y, pr.w, pr.h, 14);
       ctx.fill();
-      ctx.restore();
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(pr.x, pr.y, pr.w, pr.h, 14);
-      ctx.clip();
-      const tiPattern = getTitaniumPattern(ctx);
-      if (tiPattern) {
-        ctx.fillStyle = tiPattern;
-        ctx.fillRect(pr.x, pr.y, pr.w, pr.h);
-      }
-      const topBevel = ctx.createLinearGradient(pr.x, pr.y, pr.x, pr.y + 24);
-      topBevel.addColorStop(0, 'rgba(226, 240, 255, 0.14)');
-      topBevel.addColorStop(1, 'rgba(226, 240, 255, 0)');
-      ctx.fillStyle = topBevel;
-      ctx.fillRect(pr.x, pr.y, pr.w, 24);
-      ctx.restore();
-
       ctx.strokeStyle = 'rgba(192, 132, 252, 0.42)';
       ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.roundRect(pr.x, pr.y, pr.w, pr.h, 14);
       ctx.stroke();
 
-      // Corner mounting bolts
+      // Corner mounting bolts (flat circles)
       for (const [bx, by] of [
         [pr.x + 12, pr.y + 12],
         [pr.x + pr.w - 12, pr.y + 12],
         [pr.x + 12, pr.y + pr.h - 12],
         [pr.x + pr.w - 12, pr.y + pr.h - 12],
       ]) {
-        const bGrad = ctx.createRadialGradient(bx - 1, by - 1, 0.5, bx, by, 3.6);
-        bGrad.addColorStop(0, '#f1f5f9');
-        bGrad.addColorStop(0.6, '#64748b');
-        bGrad.addColorStop(1, '#1e293b');
-        ctx.fillStyle = bGrad;
+        ctx.fillStyle = '#64748b';
         ctx.beginPath();
         ctx.arc(bx, by, 3.4, 0, Math.PI * 2);
         ctx.fill();
@@ -1384,31 +1337,15 @@ export const zeroGLabGame: GameModule = {
         sx += 98;
       }
 
-      // Precision Brushed-Titanium Optical Bench Rail with mm ruler ticks
+      // Precision Optical Bench Rail with mm ruler ticks (flat slate, no gradient/clip)
       const railX = pr.x + 28;
       const railW = pr.w - 56;
-      const railGrad = ctx.createLinearGradient(railX, g.benchY, railX, g.benchY + 16);
-      railGrad.addColorStop(0, '#64748b');
-      railGrad.addColorStop(0.24, '#94a3b8');
-      railGrad.addColorStop(0.55, '#334155');
-      railGrad.addColorStop(1, '#1e293b');
-      ctx.fillStyle = railGrad;
+      ctx.fillStyle = '#334155';
       ctx.beginPath();
       ctx.roundRect(railX, g.benchY, railW, 16, 4);
       ctx.fill();
-      if (tiPattern) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(railX, g.benchY, railW, 16, 4);
-        ctx.clip();
-        ctx.fillStyle = tiPattern;
-        ctx.fillRect(railX, g.benchY, railW, 16);
-        ctx.restore();
-      }
       ctx.strokeStyle = 'rgba(203, 213, 225, 0.55)';
       ctx.lineWidth = 1.3;
-      ctx.beginPath();
-      ctx.roundRect(railX, g.benchY, railW, 16, 4);
       ctx.stroke();
 
       ctx.strokeStyle = 'rgba(226, 240, 255, 0.48)';
@@ -1431,7 +1368,7 @@ export const zeroGLabGame: GameModule = {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Ambient volumetric optical light-path shimmer (Target -> Water Sphere -> Screen)
+      // Flat translucent optical light cones (Target -> Water Sphere -> Screen, zero gradients/lighter)
       if (waterVol >= 25) {
         const waterNorm = waterVol / 100;
         const focalX = g.lensX + lerp(pr.w * 0.14, pr.w * 0.09, waterNorm);
@@ -1439,13 +1376,7 @@ export const zeroGLabGame: GameModule = {
         const tRatio = (g.screenX - focalX) / Math.max(20, focalX - g.lensX);
         const hitSpan = rimOff * clamp(tRatio, 0.2, 1.35);
 
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        // Soft gold outer convex light cone
-        const coneIn = ctx.createLinearGradient(g.objX + 24, g.axisY, g.lensX, g.axisY);
-        coneIn.addColorStop(0, 'rgba(56, 189, 248, 0.12)');
-        coneIn.addColorStop(1, 'rgba(251, 191, 36, 0.08)');
-        ctx.fillStyle = coneIn;
+        ctx.fillStyle = 'rgba(251, 191, 36, 0.08)';
         ctx.beginPath();
         ctx.moveTo(g.objX + 24, g.axisY - 34);
         ctx.lineTo(g.lensX, g.axisY - rimOff);
@@ -1454,11 +1385,7 @@ export const zeroGLabGame: GameModule = {
         ctx.closePath();
         ctx.fill();
 
-        const coneOut = ctx.createLinearGradient(g.lensX, g.axisY, g.screenX, g.axisY);
-        coneOut.addColorStop(0, 'rgba(251, 191, 36, 0.14)');
-        coneOut.addColorStop(0.5, 'rgba(253, 224, 71, 0.18)');
-        coneOut.addColorStop(1, 'rgba(251, 191, 36, 0.06)');
-        ctx.fillStyle = coneOut;
+        ctx.fillStyle = 'rgba(253, 224, 71, 0.11)';
         ctx.beginPath();
         ctx.moveTo(g.lensX, g.axisY - rimOff);
         ctx.lineTo(focalX, g.axisY);
@@ -1469,16 +1396,16 @@ export const zeroGLabGame: GameModule = {
         ctx.closePath();
         ctx.fill();
 
-        // Subtle glowing focal caustic glint
-        drawAdditiveGlow(ctx, focalX, g.axisY, 16, '253, 224, 71', 0.22 + l1OuterSharp * 0.25);
+        // Crisp focal point marker
+        ctx.fillStyle = `rgba(253, 224, 71, ${(0.5 + l1OuterSharp * 0.45).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(focalX, g.axisY, 3.2, 0, Math.PI * 2);
+        ctx.fill();
 
-        // Soft emerald concave central beam when air bubble is present
+        // Flat emerald concave central beam when air bubble is present
         if (g.bubbleR > 4) {
           const inOff = Math.min(g.bubbleR * 0.62, 16);
-          const bBeam = ctx.createLinearGradient(g.lensX, g.axisY, g.screenX, g.axisY);
-          bBeam.addColorStop(0, 'rgba(74, 222, 128, 0.2)');
-          bBeam.addColorStop(1, 'rgba(74, 222, 128, 0.08)');
-          ctx.fillStyle = bBeam;
+          ctx.fillStyle = 'rgba(74, 222, 128, 0.13)';
           ctx.beginPath();
           ctx.moveTo(g.lensX, g.axisY - inOff);
           ctx.lineTo(g.screenX - 4, g.axisY - inOff * 1.35);
@@ -1498,11 +1425,12 @@ export const zeroGLabGame: GameModule = {
       ctx.roundRect(g.objX - 36, g.axisY - 56, 72, 104, 8);
       ctx.fill();
 
-      // Additive backlight aura
-      drawAdditiveGlow(ctx, g.objX, g.axisY, 58, '56, 189, 248', 0.3);
-
       drawAstronautEmblem(g.objX, g.axisY + 2, 0.92, false, 1, 0, '#e0f2fe');
-      drawGlassViewport(ctx, g.objX - 36, g.axisY - 56, 72, 104, 8, 'rgba(56, 189, 248, 0.05)');
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.48)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.roundRect(g.objX - 36, g.axisY - 56, 72, 104, 8);
+      ctx.stroke();
       ctx.font = '700 10.5px "Noto Sans SC", sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#93c5fd';
@@ -1525,16 +1453,12 @@ export const zeroGLabGame: GameModule = {
       ctx.ellipse(g.lensX, g.axisY, g.maxSphereR * 0.22, g.maxSphereR * 0.74, 0, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Shimmering Water Sphere with Fresnel rim glow, caustic specular glint & harmonic wobble
+      // Crisp Water Sphere with Fresnel rim highlight & specular arc (zero gradients/additive halos)
       ctx.save();
       ctx.translate(g.lensX, g.axisY);
 
-      // Outer Fresnel refraction glow halo
-      drawAdditiveGlow(ctx, 0, 0, g.sphereR * 1.65, '56, 189, 248', 0.34);
-      drawAdditiveGlow(ctx, g.sphereR * 0.35, g.sphereR * 0.35, g.sphereR * 0.85, '186, 230, 253', 0.22);
-
       ctx.beginPath();
-      const segs = 48;
+      const segs = 36;
       for (let i = 0; i <= segs; i++) {
         const ang = (i / segs) * Math.PI * 2;
         const wob =
@@ -1549,49 +1473,16 @@ export const zeroGLabGame: GameModule = {
       }
       ctx.closePath();
 
-      const waterFill = ctx.createRadialGradient(
-        -g.sphereR * 0.32,
-        -g.sphereR * 0.34,
-        g.sphereR * 0.06,
-        0,
-        0,
-        g.sphereR * 1.08
-      );
-      waterFill.addColorStop(0, 'rgba(240, 249, 255, 0.82)');
-      waterFill.addColorStop(0.38, 'rgba(56, 189, 248, 0.26)');
-      waterFill.addColorStop(0.76, 'rgba(14, 116, 144, 0.46)');
-      waterFill.addColorStop(0.92, 'rgba(125, 211, 252, 0.78)');
-      waterFill.addColorStop(1, 'rgba(224, 242, 254, 0.96)');
-      ctx.fillStyle = waterFill;
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.34)';
       ctx.fill();
 
-      // Iridescent Fresnel rim highlight stroke
-      ctx.strokeStyle = 'rgba(224, 242, 254, 0.96)';
+      // Fresnel rim highlight stroke
+      ctx.strokeStyle = 'rgba(224, 242, 254, 0.94)';
       ctx.lineWidth = 2.1;
       ctx.stroke();
 
-      // Transmitted lower-right caustic light crescent inside sphere
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const caustic = ctx.createRadialGradient(
-        g.sphereR * 0.34,
-        g.sphereR * 0.38,
-        2,
-        g.sphereR * 0.34,
-        g.sphereR * 0.38,
-        g.sphereR * 0.56
-      );
-      caustic.addColorStop(0, 'rgba(224, 242, 254, 0.65)');
-      caustic.addColorStop(0.55, 'rgba(125, 211, 252, 0.26)');
-      caustic.addColorStop(1, 'rgba(56, 189, 248, 0)');
-      ctx.fillStyle = caustic;
-      ctx.beginPath();
-      ctx.arc(g.sphereR * 0.3, g.sphereR * 0.34, g.sphereR * 0.52, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
-      // Curved specular highlight + luminous caustic pinpoint glint on water sphere
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+      // Specular highlight crescent on water sphere
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.86)';
       ctx.beginPath();
       ctx.ellipse(
         -g.sphereR * 0.34,
@@ -1603,36 +1494,20 @@ export const zeroGLabGame: GameModule = {
         Math.PI * 2
       );
       ctx.fill();
-      drawAdditiveGlow(ctx, -g.sphereR * 0.36, -g.sphereR * 0.36, g.sphereR * 0.42, '255, 255, 255', 0.62);
 
       // Faint miniature internal inverted reflection inside water ball
       if (waterVol >= 45) {
         drawAstronautEmblem(0, 0, (g.sphereR / 64) * 0.65, true, 0.28, 0, '#fde68a');
       }
 
-      // Centered Air Bubble (equivalent to dual concave lens!) with Fresnel silver ring
+      // Centered Air Bubble (equivalent to dual concave lens!)
       if (g.bubbleR > 2.5) {
-        if (l1InnerSharp >= 0.7) {
-          drawAdditiveGlow(ctx, 0, 0, g.bubbleR * 1.6, '74, 222, 128', 0.26);
-        }
-        const bubGrad = ctx.createRadialGradient(
-          g.bubbleR * 0.25,
-          g.bubbleR * 0.25,
-          1,
-          0,
-          0,
-          g.bubbleR * 1.05
-        );
-        bubGrad.addColorStop(0, 'rgba(6, 16, 36, 0.88)');
-        bubGrad.addColorStop(0.68, 'rgba(15, 36, 68, 0.78)');
-        bubGrad.addColorStop(0.9, 'rgba(186, 230, 253, 0.92)');
-        bubGrad.addColorStop(1, 'rgba(255, 255, 255, 0.98)');
-        ctx.fillStyle = bubGrad;
+        ctx.fillStyle = 'rgba(8, 22, 48, 0.86)';
         ctx.beginPath();
         ctx.arc(0, 0, g.bubbleR, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = l1InnerSharp >= 0.7 ? '#86efac' : '#ffffff';
+        ctx.lineWidth = 1.8;
         ctx.stroke();
 
         // Crisp inner total-internal-reflection sparkle
@@ -1683,22 +1558,13 @@ export const zeroGLabGame: GameModule = {
       ctx.fillStyle = '#64748b';
       ctx.fillRect(g.screenX - 4, g.axisY + 62, 8, g.benchY - (g.axisY + 62));
 
-      // Screen panel with recessed optical glazing
+      // Screen panel border
       const scrW = 94;
       const scrH = 128;
       ctx.fillStyle = 'rgba(7, 17, 34, 0.94)';
       ctx.beginPath();
       ctx.roundRect(g.screenX - scrW * 0.5, g.axisY - scrH * 0.5, scrW, scrH, 10);
       ctx.fill();
-      drawGlassViewport(
-        ctx,
-        g.screenX - scrW * 0.5,
-        g.axisY - scrH * 0.5,
-        scrW,
-        scrH,
-        10,
-        'rgba(56, 189, 248, 0.04)'
-      );
       ctx.strokeStyle =
         l1LockTime > 0
           ? '#4ade80'
@@ -1836,21 +1702,17 @@ export const zeroGLabGame: GameModule = {
             ctx.stroke();
           };
 
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          ctx.strokeStyle = 'rgba(251, 191, 36, 0.34)';
-          ctx.lineWidth = 6;
+          ctx.strokeStyle = 'rgba(251, 191, 36, 0.42)';
+          ctx.lineWidth = 5;
           traceGoldRays();
           ctx.strokeStyle = 'rgba(254, 240, 138, 0.95)';
           ctx.lineWidth = 1.8;
           traceGoldRays();
-          ctx.restore();
 
-          // Luminous Focal Point marker F1
-          drawAdditiveGlow(ctx, focalX, g.axisY, 20, '253, 224, 71', 0.72);
+          // Focal Point marker F1
           ctx.fillStyle = '#fef9c3';
           ctx.beginPath();
-          ctx.arc(focalX, g.axisY, 4.2, 0, Math.PI * 2);
+          ctx.arc(focalX, g.axisY, 4.4, 0, Math.PI * 2);
           ctx.fill();
           ctx.font = '700 10px "JetBrains Mono", monospace';
           ctx.fillStyle = '#fde047';
@@ -1876,15 +1738,12 @@ export const zeroGLabGame: GameModule = {
             ctx.stroke();
           };
 
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
-          ctx.strokeStyle = 'rgba(74, 222, 128, 0.36)';
-          ctx.lineWidth = 5.5;
+          ctx.strokeStyle = 'rgba(74, 222, 128, 0.42)';
+          ctx.lineWidth = 4.8;
           traceGreenRays();
           ctx.strokeStyle = 'rgba(187, 247, 208, 0.96)';
           ctx.lineWidth = 1.8;
           traceGreenRays();
-          ctx.restore();
 
           ctx.fillStyle = '#86efac';
           ctx.font = '700 10px "JetBrains Mono", monospace';
@@ -1909,35 +1768,13 @@ export const zeroGLabGame: GameModule = {
       const chamberR = clamp(Math.min(pr.h * 0.44, pr.w * 0.25), 108, 174);
 
       ctx.save();
-      // Mengtian Combustion Rack Frame with brushed titanium grain & corner bolts
-      ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.58)';
-      ctx.shadowBlur = 24;
-      ctx.shadowOffsetY = 8;
-      const rackGrad = ctx.createLinearGradient(pr.x, pr.y, pr.x + pr.w, pr.y + pr.h);
-      rackGrad.addColorStop(0, 'rgba(22, 32, 52, 0.93)');
-      rackGrad.addColorStop(0.5, 'rgba(13, 21, 38, 0.95)');
-      rackGrad.addColorStop(1, 'rgba(8, 14, 28, 0.96)');
-      ctx.fillStyle = rackGrad;
+      // Mengtian Combustion Rack Frame (flat slate fill, zero clip/gradients)
+      ctx.fillStyle = 'rgba(12, 20, 38, 0.95)';
       ctx.beginPath();
       ctx.roundRect(pr.x, pr.y, pr.w, pr.h, 14);
       ctx.fill();
-      ctx.restore();
-
-      const tiPattern = getTitaniumPattern(ctx);
-      if (tiPattern) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(pr.x, pr.y, pr.w, pr.h, 14);
-        ctx.clip();
-        ctx.fillStyle = tiPattern;
-        ctx.fillRect(pr.x, pr.y, pr.w, pr.h);
-        ctx.restore();
-      }
       ctx.strokeStyle = surgeTimer > 0 ? 'rgba(245, 158, 11, 0.78)' : 'rgba(192, 132, 252, 0.42)';
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(pr.x, pr.y, pr.w, pr.h, 14);
       ctx.stroke();
 
       // Top chamber status banner
@@ -1963,40 +1800,13 @@ export const zeroGLabGame: GameModule = {
       );
       ctx.textAlign = 'left';
 
-      // Precision Brushed-Steel Circular Pressurized Porthole Flange
-      ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
-      ctx.shadowBlur = 18;
-      const flangeGrad = ctx.createLinearGradient(
-        cx - chamberR - 16,
-        cy - chamberR - 16,
-        cx + chamberR + 16,
-        cy + chamberR + 16
-      );
-      flangeGrad.addColorStop(0, '#94a3b8');
-      flangeGrad.addColorStop(0.28, '#475569');
-      flangeGrad.addColorStop(0.52, '#cbd5e1');
-      flangeGrad.addColorStop(0.8, '#1e293b');
-      flangeGrad.addColorStop(1, '#334155');
-      ctx.fillStyle = flangeGrad;
+      // Steel Circular Pressurized Porthole Flange (flat metallic steel, no gradient/clip)
+      ctx.fillStyle = '#475569';
       ctx.beginPath();
       ctx.arc(cx, cy, chamberR + 16, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
-
-      if (tiPattern) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, chamberR + 16, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.fillStyle = tiPattern;
-        ctx.fillRect(cx - chamberR - 16, cy - chamberR - 16, (chamberR + 16) * 2, (chamberR + 16) * 2);
-        ctx.restore();
-      }
       ctx.strokeStyle = 'rgba(226, 232, 240, 0.55)';
       ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.arc(cx, cy, chamberR + 16, 0, Math.PI * 2);
       ctx.stroke();
 
       // Recessed inner machined groove
@@ -2006,16 +1816,12 @@ export const zeroGLabGame: GameModule = {
       ctx.arc(cx, cy, chamberR + 2, 0, Math.PI * 2);
       ctx.stroke();
 
-      // 12 Specular stainless porthole bolts
+      // 12 Stainless porthole bolts (flat circles)
       for (let i = 0; i < 12; i++) {
         const a = (i / 12) * Math.PI * 2;
         const bx = cx + Math.cos(a) * (chamberR + 9);
         const by = cy + Math.sin(a) * (chamberR + 9);
-        const bGrad = ctx.createRadialGradient(bx - 1, by - 1, 0.4, bx, by, 3.6);
-        bGrad.addColorStop(0, '#ffffff');
-        bGrad.addColorStop(0.55, '#94a3b8');
-        bGrad.addColorStop(1, '#1e293b');
-        ctx.fillStyle = bGrad;
+        ctx.fillStyle = '#94a3b8';
         ctx.beginPath();
         ctx.arc(bx, by, 3.2, 0, Math.PI * 2);
         ctx.fill();
@@ -2030,11 +1836,7 @@ export const zeroGLabGame: GameModule = {
       ctx.arc(cx, cy, chamberR, 0, Math.PI * 2);
       ctx.clip();
 
-      const cavGrad = ctx.createRadialGradient(cx, cy, 8, cx, cy, chamberR);
-      cavGrad.addColorStop(0, ignited ? '#0c2448' : '#08101f');
-      cavGrad.addColorStop(0.65, '#050d1d');
-      cavGrad.addColorStop(1, '#02050d');
-      ctx.fillStyle = cavGrad;
+      ctx.fillStyle = ignited ? '#061329' : '#030812';
       ctx.fillRect(cx - chamberR, cy - chamberR, chamberR * 2, chamberR * 2);
 
       // Animated Micro-Airflow streamlines passing left -> right
@@ -2054,110 +1856,81 @@ export const zeroGLabGame: GameModule = {
       }
 
       // Ceramic central fuel nozzle rising from bottom to center
-      const nozGrad = ctx.createLinearGradient(cx - 5, cy, cx + 5, cy);
-      nozGrad.addColorStop(0, '#334155');
-      nozGrad.addColorStop(0.45, '#94a3b8');
-      nozGrad.addColorStop(1, '#1e293b');
-      ctx.fillStyle = nozGrad;
+      ctx.fillStyle = '#64748b';
       ctx.fillRect(cx - 5, cy + 4, 10, chamberR);
       ctx.fillStyle = '#e2e8f0';
       ctx.beginPath();
       ctx.arc(cx, cy + 4, 6, 0, Math.PI * 2);
       ctx.fill();
 
-      // Soft multi-layered volumetric CO2 Exhaust Shell haze wrapping the flame!
+      // Lightweight translucent CO2 Exhaust Shell ring wrapping the flame (no radial gradients)
       if (exhaustShell > 0.12) {
-        const shellR = Math.max(40, flameRadius + 22 + exhaustShell * 48);
+        const shellR = Math.max(36, flameRadius + 20 + exhaustShell * 38);
         const driftX = (airflow / 100) * 14;
-        const exhGrad = ctx.createRadialGradient(
-          cx + driftX * 0.3,
-          cy,
-          Math.max(8, flameRadius * 0.55),
-          cx + driftX * 0.5,
-          cy,
-          shellR
-        );
-        exhGrad.addColorStop(0, 'rgba(71, 85, 105, 0)');
-        exhGrad.addColorStop(0.48, `rgba(148, 163, 184, ${(exhaustShell * 0.42).toFixed(3)})`);
-        exhGrad.addColorStop(0.78, `rgba(71, 85, 105, ${(exhaustShell * 0.68).toFixed(3)})`);
-        exhGrad.addColorStop(1, 'rgba(15, 23, 42, 0)');
-        ctx.fillStyle = exhGrad;
+        ctx.strokeStyle = `rgba(148, 163, 184, ${(exhaustShell * 0.42).toFixed(3)})`;
+        ctx.lineWidth = 12 + exhaustShell * 16;
         ctx.beginPath();
-        ctx.arc(cx + driftX * 0.5, cy, shellR, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Swirling soft volumetric CO2 haze clouds around the combustion shell
-        for (let k = 0; k < 5; k++) {
-          const ang = (k / 5) * Math.PI * 2 + elapsed * 0.45;
-          const distR = flameRadius * 0.85 + 14 + exhaustShell * 18;
-          const hx = cx + driftX * 0.6 + Math.cos(ang) * distR;
-          const hy = cy + Math.sin(ang) * distR * 0.92;
-          const puffR = 22 + exhaustShell * 24;
-          const puff = ctx.createRadialGradient(hx, hy, 2, hx, hy, puffR);
-          puff.addColorStop(0, `rgba(148, 163, 184, ${(exhaustShell * 0.24).toFixed(3)})`);
-          puff.addColorStop(1, 'rgba(30, 41, 59, 0)');
-          ctx.fillStyle = puff;
-          ctx.beginPath();
-          ctx.arc(hx, hy, puffR, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        ctx.arc(cx + driftX * 0.45, cy, shellR * 0.72, 0, Math.PI * 2);
+        ctx.stroke();
       }
 
-      // ---- Render Flame (0g Multi-Layered Cobalt-Cyan-White Plasma Bloom vs 1g Teardrop) ----
+      // ---- Render Flame (0g Layered Cobalt-Cyan-White Sphere vs 1g Teardrop, zero gradients/lighter) ----
       if (ignited && flameRadius > 2) {
         const shearX = earthGravityMode ? 0 : blowoutStress * 34;
         const pulse = 1 + Math.sin(elapsed * 9) * 0.035;
 
         if (earthGravityMode) {
-          // 1g Buoyancy Yellow-Orange Teardrop Flame with warm additive thermal bloom
-          drawAdditiveGlow(ctx, cx, cy - 28, 92, '249, 115, 22', 0.34);
-          drawAdditiveGlow(ctx, cx, cy - 22, 48, '250, 204, 21', 0.5);
+          // 1g Buoyancy Yellow-Orange Teardrop Flame (flat layered silhouettes)
           ctx.save();
           ctx.translate(cx, cy + 4);
           const fH = 88 + Math.sin(elapsed * 16) * 8;
           const fW = 30 + Math.cos(elapsed * 13) * 3;
-          const tGrad = ctx.createLinearGradient(0, 10, 0, -fH);
-          tGrad.addColorStop(0, 'rgba(56, 189, 248, 0.9)');
-          tGrad.addColorStop(0.28, 'rgba(251, 146, 60, 0.94)');
-          tGrad.addColorStop(0.7, 'rgba(250, 204, 21, 0.9)');
-          tGrad.addColorStop(1, 'rgba(254, 240, 138, 0.12)');
-          ctx.fillStyle = tGrad;
+          ctx.fillStyle = 'rgba(251, 146, 60, 0.82)';
           ctx.beginPath();
           ctx.moveTo(0, -fH);
           ctx.bezierCurveTo(fW, -fH * 0.4, fW * 0.95, 6, 0, 8);
           ctx.bezierCurveTo(-fW * 0.95, 6, -fW, -fH * 0.4, 0, -fH);
           ctx.fill();
+
+          ctx.fillStyle = 'rgba(250, 204, 21, 0.9)';
+          ctx.beginPath();
+          ctx.moveTo(0, -fH * 0.72);
+          ctx.bezierCurveTo(fW * 0.62, -fH * 0.28, fW * 0.6, 5, 0, 7);
+          ctx.bezierCurveTo(-fW * 0.6, 5, -fW * 0.62, -fH * 0.28, 0, -fH * 0.72);
+          ctx.fill();
+
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.88)';
+          ctx.beginPath();
+          ctx.ellipse(0, 2, fW * 0.45, 7, 0, 0, Math.PI * 2);
+          ctx.fill();
           ctx.restore();
         } else {
-          // 0g Mesmerizing Isotropic Spherical Blue Cold Flame with multi-layered additive plasma bloom!
+          // 0g Isotropic Spherical Blue Cold Flame (3 crisp translucent concentric shells)
           const fr = flameRadius * pulse;
           const fx = cx + shearX;
           const fy = cy;
 
-          // Multi-pass volumetric cobalt -> cyan -> ice-white plasma radiance
-          drawAdditiveGlow(ctx, fx, fy, fr * 2.55, '37, 99, 235', 0.44);
-          drawAdditiveGlow(ctx, fx, fy, fr * 1.65, '56, 189, 248', 0.58);
-          drawAdditiveGlow(ctx, fx, fy, fr * 0.85, '224, 242, 254', 0.72);
-
-          // Main spherical flame shell (slightly elongated horizontally if blowoutStress > 0)
           ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
           ctx.translate(fx, fy);
           ctx.scale(1 + blowoutStress * 0.42, 1 - blowoutStress * 0.16);
-          const sphereGrad = ctx.createRadialGradient(0, 0, fr * 0.06, 0, 0, fr);
-          sphereGrad.addColorStop(0, 'rgba(255, 255, 255, 0.94)');
-          sphereGrad.addColorStop(0.36, 'rgba(186, 230, 253, 0.76)');
-          sphereGrad.addColorStop(0.72, 'rgba(37, 99, 235, 0.68)');
-          sphereGrad.addColorStop(0.92, 'rgba(56, 189, 248, 0.92)');
-          sphereGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
-          ctx.fillStyle = sphereGrad;
+          ctx.fillStyle = 'rgba(37, 99, 235, 0.36)';
           ctx.beginPath();
-          ctx.arc(0, 0, fr, 0, Math.PI * 2);
+          ctx.arc(0, 0, fr * 1.15, 0, Math.PI * 2);
           ctx.fill();
 
-          // Luminous translucent cerulean spherical diffusion flame front ring
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.56)';
+          ctx.beginPath();
+          ctx.arc(0, 0, fr * 0.82, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = 'rgba(224, 242, 254, 0.88)';
+          ctx.beginPath();
+          ctx.arc(0, 0, fr * 0.42, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Cerulean spherical diffusion flame front ring
           ctx.strokeStyle = 'rgba(224, 242, 254, 0.92)';
-          ctx.lineWidth = 2.2;
+          ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.arc(0, 0, fr * 0.86, 0, Math.PI * 2);
           ctx.stroke();
@@ -2173,9 +1946,8 @@ export const zeroGLabGame: GameModule = {
         ctx.textAlign = 'left';
       }
 
-      // Electric igniter spark flash with additive glow
+      // Electric igniter spark flash
       if (sparkAnim > 0) {
-        drawAdditiveGlow(ctx, cx, cy, 42, '186, 230, 253', sparkAnim * 0.85);
         ctx.strokeStyle = `rgba(240, 249, 255, ${sparkAnim})`;
         ctx.lineWidth = 2.6;
         ctx.beginPath();
@@ -2292,16 +2064,12 @@ export const zeroGLabGame: GameModule = {
 
       ctx.restore(); // end circular viewport clip
 
-      // Recessed Pressurized Circular Glass Porthole Glazing & Curved Specular Arc
-      drawGlassViewport(
-        ctx,
-        cx - chamberR,
-        cy - chamberR,
-        chamberR * 2,
-        chamberR * 2,
-        chamberR,
-        'rgba(56, 189, 248, 0.035)'
-      );
+      // Circular porthole bezel rim & curved specular arc
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.38)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(cx, cy, chamberR, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.save();
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
       ctx.lineWidth = 3.2;
@@ -2342,35 +2110,13 @@ export const zeroGLabGame: GameModule = {
       const locked = Math.abs(tiltAngle) <= 4.5;
 
       ctx.save();
-      // Mengtian Zero-G Gyroscope Bay Frame with brushed titanium grain
-      ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.58)';
-      ctx.shadowBlur = 24;
-      ctx.shadowOffsetY = 8;
-      const bayGrad = ctx.createLinearGradient(pr.x, pr.y, pr.x + pr.w, pr.y + pr.h);
-      bayGrad.addColorStop(0, 'rgba(18, 32, 58, 0.92)');
-      bayGrad.addColorStop(0.55, 'rgba(10, 19, 38, 0.94)');
-      bayGrad.addColorStop(1, 'rgba(7, 14, 28, 0.96)');
-      ctx.fillStyle = bayGrad;
+      // Mengtian Zero-G Gyroscope Bay Frame (flat slate fill, zero clip/gradients)
+      ctx.fillStyle = 'rgba(11, 20, 40, 0.95)';
       ctx.beginPath();
       ctx.roundRect(pr.x, pr.y, pr.w, pr.h, 14);
       ctx.fill();
-      ctx.restore();
-
-      const tiPattern = getTitaniumPattern(ctx);
-      if (tiPattern) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(pr.x, pr.y, pr.w, pr.h, 14);
-        ctx.clip();
-        ctx.fillStyle = tiPattern;
-        ctx.fillRect(pr.x, pr.y, pr.w, pr.h);
-        ctx.restore();
-      }
       ctx.strokeStyle = locked ? 'rgba(74, 222, 128, 0.58)' : 'rgba(192, 132, 252, 0.42)';
       ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.roundRect(pr.x, pr.y, pr.w, pr.h, 14);
       ctx.stroke();
 
       // Header + Zero-Propellant Badge
@@ -2414,7 +2160,11 @@ export const zeroGLabGame: GameModule = {
       ctx.fillStyle = '#4ade80';
       const fillH = detH * 0.84 * fillRatio;
       ctx.fillRect(detX + 10, detY + detH * 0.42 - fillH, 8, fillH);
-      drawGlassViewport(ctx, detX - 10, detY - detH * 0.5, 34, detH, 6, 'rgba(56, 189, 248, 0.04)');
+      ctx.strokeStyle = 'rgba(148, 197, 255, 0.35)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(detX - 10, detY - detH * 0.5, 34, detH, 6);
+      ctx.stroke();
 
       ctx.font = '700 10px "JetBrains Mono", monospace';
       ctx.textAlign = 'center';
@@ -2423,7 +2173,7 @@ export const zeroGLabGame: GameModule = {
       ctx.fillText(`${lockAccum.toFixed(1)}s`, detX + 7, detY + detH * 0.5 + 16);
       ctx.textAlign = 'left';
 
-      // ---- Alignment Laser Beam with Luminous Additive Emerald Bloom ----
+      // ---- Alignment Laser Beam (flat source-over 2-pass beam, zero lighter/glows) ----
       const emitterLocalX = 82;
       const laserStartX = platCx + Math.cos(tiltRad) * emitterLocalX;
       const laserStartY = platCy + Math.sin(tiltRad) * emitterLocalX;
@@ -2438,39 +2188,25 @@ export const zeroGLabGame: GameModule = {
           ? '239, 68, 68'
           : '250, 204, 21';
 
-      // Multi-pass additive laser bloom + emitter & target hotspot flares
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.strokeStyle = `rgba(${laserRgb}, 0.24)`;
-      ctx.lineWidth = 14;
+      ctx.strokeStyle = `rgba(${laserRgb}, 0.36)`;
+      ctx.lineWidth = 8;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(laserStartX, laserStartY);
       ctx.lineTo(laserHitX, laserHitY);
       ctx.stroke();
 
-      ctx.strokeStyle = `rgba(${laserRgb}, 0.52)`;
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.moveTo(laserStartX, laserStartY);
-      ctx.lineTo(laserHitX, laserHitY);
-      ctx.stroke();
-
-      // White-hot optical beam core
       ctx.strokeStyle = locked ? '#dcfce7' : Math.abs(tiltAngle) > 18 ? '#fee2e2' : '#fef9c3';
       ctx.lineWidth = 2.2;
       ctx.beginPath();
       ctx.moveTo(laserStartX, laserStartY);
       ctx.lineTo(laserHitX, laserHitY);
       ctx.stroke();
-      ctx.restore();
 
-      // Emitter & impact optical lens blooms
-      drawAdditiveGlow(ctx, laserStartX, laserStartY, 16, laserRgb, 0.72);
-      drawAdditiveGlow(ctx, laserHitX, laserHitY, locked ? 26 : 18, laserRgb, locked ? 0.85 : 0.62);
+      // Impact dot
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(laserHitX, laserHitY, 3.8, 0, Math.PI * 2);
+      ctx.arc(laserHitX, laserHitY, 4.2, 0, Math.PI * 2);
       ctx.fill();
 
       // ---- Floating Optical Platform + Central Control Moment Gyroscope ----
@@ -2478,29 +2214,13 @@ export const zeroGLabGame: GameModule = {
       ctx.translate(platCx, platCy);
       ctx.rotate(tiltRad);
 
-      // Platform chassis bar with brushed titanium gradient
-      const chGrad = ctx.createLinearGradient(0, -24, 0, 24);
-      chGrad.addColorStop(0, '#475569');
-      chGrad.addColorStop(0.26, '#64748b');
-      chGrad.addColorStop(0.65, '#1e293b');
-      chGrad.addColorStop(1, '#0f172a');
-      ctx.fillStyle = chGrad;
+      // Platform chassis bar (flat dark titanium, zero gradient/clip)
+      ctx.fillStyle = '#253348';
       ctx.beginPath();
       ctx.roundRect(-86, -24, 172, 48, 10);
       ctx.fill();
-      if (tiPattern) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(-86, -24, 172, 48, 10);
-        ctx.clip();
-        ctx.fillStyle = tiPattern;
-        ctx.fillRect(-86, -24, 172, 48);
-        ctx.restore();
-      }
       ctx.strokeStyle = locked ? '#4ade80' : '#94a3b8';
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(-86, -24, 172, 48, 10);
       ctx.stroke();
 
       // Laser emitter turret on right end of platform
@@ -2521,109 +2241,31 @@ export const zeroGLabGame: GameModule = {
       ctx.lineWidth = 1.4;
       ctx.strokeRect(-78, -12, 18, 24);
 
-      // Central CMG Circular Housing Ring with metallic radial titanium sheen
+      // High-Speed Precision 3D Control Moment Gyroscope (CMG)
       const cmgR = 54;
-      const houseGrad = ctx.createRadialGradient(-16, -16, 12, 0, 0, cmgR + 4);
-      houseGrad.addColorStop(0, '#1e293b');
-      houseGrad.addColorStop(0.75, '#0f172a');
-      houseGrad.addColorStop(0.92, '#475569');
-      houseGrad.addColorStop(1, '#94a3b8');
-      ctx.fillStyle = houseGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, cmgR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(203, 213, 225, 0.72)';
-      ctx.lineWidth = 3.6;
-      ctx.stroke();
 
-      // High-Speed Angular Momentum Glow Halo (cyan-gold additive bloom)
-      drawAdditiveGlow(ctx, 0, 0, cmgR * 1.15, '56, 189, 248', 0.14 + normL * 0.34);
-      drawAdditiveGlow(ctx, 0, 0, cmgR * 0.72, '251, 191, 36', 0.14 + normL * 0.24);
+      drawControlGyroscope3D(ctx, {
+        cx: 0,
+        cy: 0,
+        radius: cmgR,
+        rotorAngle: rotorSpinAngle,
+        gimbalTiltRad: (gimbalAngle * Math.PI) / 180,
+        rpmNorm: normL,
+        simTime: elapsed,
+      });
 
-      // Movable Gimbal Cage (visually pivots with gimbalAngle!) with titanium sheen + MLI collars
-      ctx.save();
-      ctx.rotate((gimbalAngle * Math.PI) / 180);
-      const gimGrad = ctx.createLinearGradient(-cmgR, -cmgR, cmgR, cmgR);
-      gimGrad.addColorStop(0, '#f8fafc');
-      gimGrad.addColorStop(0.35, '#94a3b8');
-      gimGrad.addColorStop(0.7, '#475569');
-      gimGrad.addColorStop(1, '#e2e8f0');
-      ctx.strokeStyle = gimGrad;
-      ctx.lineWidth = 3.8;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, cmgR - 9, (cmgR - 9) * 0.84, 0, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Kapton MLI gold actuator collars on gimbal pivot trunnions
-      ctx.fillStyle = mliPattern ?? '#d97706';
-      ctx.fillRect(-(cmgR - 5), -5, 8, 10);
-      ctx.fillRect(cmgR - 13, -5, 8, 10);
-      ctx.strokeStyle = 'rgba(254, 243, 199, 0.75)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(-(cmgR - 5), -5, 8, 10);
-      ctx.strokeRect(cmgR - 13, -5, 8, 10);
-
-      // High-Speed Spinning Machined Brass/Gold Flywheel Rotor with MLI thermal rim band
-      const rotorR = cmgR - 17;
-      ctx.save();
-      ctx.rotate(rotorSpinAngle);
-      const rotorGrad = ctx.createRadialGradient(-rotorR * 0.25, -rotorR * 0.25, 4, 0, 0, rotorR);
-      rotorGrad.addColorStop(0, '#fffbeb');
-      rotorGrad.addColorStop(0.35, '#fde047');
-      rotorGrad.addColorStop(0.68, '#d97706');
-      rotorGrad.addColorStop(1, '#78350f');
-      ctx.strokeStyle = rotorGrad;
-      ctx.lineWidth = 8;
-      ctx.beginPath();
-      ctx.arc(0, 0, rotorR - 4, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Subtle gold Kapton MLI thermal foil inlay band on rotor perimeter
-      if (mliPattern) {
-        ctx.strokeStyle = mliPattern;
-        ctx.lineWidth = 3.5;
-        ctx.beginPath();
-        ctx.arc(0, 0, rotorR - 4, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      // Machined brass flywheel spokes with specular core lines
-      ctx.strokeStyle = '#fde68a';
-      ctx.lineWidth = 2.6;
-      for (let s = 0; s < 4; s++) {
-        const sa = (s * Math.PI) / 2;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(sa) * 6, Math.sin(sa) * 6);
-        ctx.lineTo(Math.cos(sa) * (rotorR - 6), Math.sin(sa) * (rotorR - 6));
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      // Luminous additive cyan motion-blur spin streaks at high RPM
+      // Cyan motion-blur spin streaks at high RPM (normal source-over blend)
+      const rotorR = cmgR * 0.56;
       if (rpm > 2000) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.strokeStyle = `rgba(125, 211, 252, ${(normL * 0.85).toFixed(3)})`;
-        ctx.lineWidth = 2.4;
+        ctx.strokeStyle = `rgba(125, 211, 252, ${(normL * 0.72).toFixed(3)})`;
+        ctx.lineWidth = 2.2;
         for (let a = 0; a < 3; a++) {
           const baseA = rotorSpinAngle * 1.3 + (a * Math.PI * 2) / 3;
           ctx.beginPath();
-          ctx.arc(0, 0, rotorR + 2, baseA, baseA + 0.9 * normL);
+          ctx.arc(0, 0, rotorR + 3, baseA, baseA + 0.9 * normL);
           ctx.stroke();
         }
-        ctx.restore();
       }
-
-      // Central spin axle hub with glowing cyan angular momentum core
-      drawAdditiveGlow(ctx, 0, 0, 14 + normL * 14, '56, 189, 248', 0.35 + normL * 0.45);
-      ctx.fillStyle = '#e0f2fe';
-      ctx.beginPath();
-      ctx.arc(0, 0, 6.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1.6;
-      ctx.stroke();
-      ctx.restore(); // end gimbal rotation
 
       ctx.restore(); // end platform rotation
 
@@ -2650,25 +2292,14 @@ export const zeroGLabGame: GameModule = {
       }
       ctx.textAlign = 'left';
 
-      // ---- Physics Overlay (V) for L3: Glowing Cyan Angular Momentum L, Disturbance τ_ext, CMG τ_cmg ----
+      // ---- Physics Overlay (V) for L3: Angular Momentum L, Disturbance τ_ext, CMG τ_cmg ----
       if (physicsOverlay) {
         ctx.save();
-        // 1. Glowing Cyan Angular Momentum Vector L = Iω perpendicular to platform spin plane
+        // 1. Cyan Angular Momentum Vector L = Iω perpendicular to platform spin plane
         const lVecLen = 30 + normL * 78;
         const lAng = tiltRad - Math.PI * 0.5;
         const lx2 = platCx + Math.cos(lAng) * lVecLen;
         const ly2 = platCy + Math.sin(lAng) * lVecLen;
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
-        ctx.lineWidth = 9;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(platCx, platCy);
-        ctx.lineTo(lx2, ly2);
-        ctx.stroke();
-        ctx.restore();
-        drawAdditiveGlow(ctx, lx2, ly2, 18, '56, 189, 248', 0.65);
         drawVectorArrow(
           ctx,
           platCx,
@@ -2687,7 +2318,6 @@ export const zeroGLabGame: GameModule = {
           const tx1 = platCx - 76;
           const ty1 = platCy - sign * 34;
           const ty2 = ty1 + sign * clamp(Math.abs(shownExt) * 1.4, 22, 62);
-          drawAdditiveGlow(ctx, tx1, ty2, 14, '249, 115, 22', 0.55);
           drawVectorArrow(ctx, tx1, ty1, tx1, ty2, '#f97316', 'τ_ext 外扰力矩', 2.4);
         }
 
@@ -2697,7 +2327,6 @@ export const zeroGLabGame: GameModule = {
           const cx1 = platCx + 76;
           const cy1 = platCy - sign * 28;
           const cy2 = cy1 + sign * clamp(Math.abs(cmgAppliedTorque) * 0.9, 24, 60);
-          drawAdditiveGlow(ctx, cx1, cy2, 14, '74, 222, 128', 0.58);
           drawVectorArrow(ctx, cx1, cy1, cx1, cy2, '#4ade80', 'τ_cmg = Ω×L', 2.4);
         }
 
@@ -2722,9 +2351,9 @@ export const zeroGLabGame: GameModule = {
 
     function drawScene(): void {
       const { width: w, height: h } = hi.getSize();
-      starfield.draw(ctx, w, h, elapsed, elapsed * 2, elapsed * 0.8);
-      drawBackdropImage(ctx, 'lab-interior', w, h, { alpha: 0.95, darken: 0.25 });
-      drawCinematicVignette(ctx, w, h, 0.36);
+      if (!drawBakedBackdrop(ctx, 'lab-interior', w, h, 0.25, 0.36)) {
+        starfield.draw(ctx, w, h, elapsed, elapsed * 2, elapsed * 0.8);
+      }
       const pr = getPlayRect(w, h);
 
       if (levelIndex === 0) drawL1(pr);

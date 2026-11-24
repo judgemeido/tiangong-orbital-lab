@@ -1,4 +1,5 @@
 import type { AudioAPI, GameId, GameMeta } from '../core/game-interface';
+import { getEffectiveQuality, subscribePerf } from '../core/perf-profile';
 import type { SaveStore } from '../core/save-store';
 import { GAME_ICONS, UI_ICONS } from './icons';
 
@@ -8,6 +9,7 @@ export interface QuickDockCallbacks {
   onOpenCodex: () => void;
   onToggleMute: () => void;
   onToggleFullscreen: () => void;
+  onTogglePerf: () => void;
 }
 
 export class QuickDock {
@@ -19,8 +21,10 @@ export class QuickDock {
   private homeBtn!: HTMLButtonElement;
   private pillButtons = new Map<GameId, HTMLButtonElement>();
   private statEl!: HTMLElement;
+  private perfBtn!: HTMLButtonElement;
   private muteBtn!: HTMLButtonElement;
   private unsubscribe: () => void;
+  private unsubPerf: () => void;
 
   constructor(
     metas: GameMeta[],
@@ -39,6 +43,7 @@ export class QuickDock {
     this.element.setAttribute('aria-label', '空间站全舱段任务切换栏');
     this.render();
     this.unsubscribe = this.save.subscribe(() => this.refreshProgress());
+    this.unsubPerf = subscribePerf(() => this.refreshPerf());
   }
 
   private render(): void {
@@ -112,6 +117,17 @@ export class QuickDock {
     });
     actions.appendChild(codexBtn);
 
+    this.perfBtn = document.createElement('button');
+    this.perfBtn.type = 'button';
+    this.perfBtn.className = 'dock-icon-btn dock-perf-btn';
+    this.perfBtn.setAttribute('data-augmented-ui', 'tl-clip br-clip border inlay');
+    this.perfBtn.addEventListener('click', () => {
+      this.audio.playSwitch();
+      this.cb.onTogglePerf();
+      this.refreshPerf();
+    });
+    actions.appendChild(this.perfBtn);
+
     this.muteBtn = document.createElement('button');
     this.muteBtn.type = 'button';
     this.muteBtn.className = 'dock-icon-btn';
@@ -138,6 +154,7 @@ export class QuickDock {
 
     this.element.appendChild(actions);
     this.refreshProgress();
+    this.refreshPerf();
     this.refreshMute();
   }
 
@@ -167,6 +184,14 @@ export class QuickDock {
     }
   }
 
+  refreshPerf(): void {
+    const q = getEffectiveQuality();
+    const isLow = q === 'low';
+    this.perfBtn.classList.toggle('is-accent', !isLow);
+    this.perfBtn.innerHTML = `<span class="ui-svg-icon">${UI_ICONS.perf}</span><span>${isLow ? '极速' : '高清'}</span>`;
+    this.perfBtn.title = `当前性能档位：${isLow ? '极速模式 (最低显卡开销, 1x渲染)' : '高清模式 (1.25x缩放)'}（点击切换）`;
+  }
+
   refreshMute(): void {
     const muted = this.audio.isMuted();
     this.muteBtn.innerHTML = `<span class="ui-svg-icon">${muted ? UI_ICONS.soundOff : UI_ICONS.soundOn}</span>`;
@@ -175,5 +200,6 @@ export class QuickDock {
 
   destroy(): void {
     this.unsubscribe();
+    this.unsubPerf();
   }
 }

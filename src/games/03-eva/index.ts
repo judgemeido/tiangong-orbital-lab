@@ -1,3 +1,4 @@
+import { drawFeitianAstronaut3D } from '../../core/aerospace-models';
 import {
   ParticleSystem,
   StarfieldRenderer,
@@ -10,13 +11,11 @@ import {
   setupHiDPICanvas,
 } from '../../core/canvas-utils';
 import {
-  drawAdditiveGlow,
-  drawGlassViewport,
-  drawSunLensFlare,
+  drawBakedBackdrop,
   drawTitaniumModule,
   getMLIPattern,
-  getTitaniumPattern,
 } from '../../core/materials';
+import { drawModelSprite } from '../../core/model-sprites';
 import type {
   GameHostAPI,
   GameInstance,
@@ -285,8 +284,9 @@ export const evaGame: GameModule = {
     const recomputeViewport = (w: number, h: number) => {
       viewW = w;
       viewH = h;
-      const safeTop = 122;
-      const safeBottom = Math.max(safeTop + 180, h - 138);
+      const compact = h <= 720;
+      const safeTop = compact ? 100 : 122;
+      const safeBottom = Math.max(safeTop + 180, h - (compact ? 94 : 138));
       const safeW = Math.max(420, w - 96);
       const safeH = Math.max(180, safeBottom - safeTop);
       scale = Math.min(safeW / WORLD_W, safeH / WORLD_H);
@@ -1250,69 +1250,23 @@ export const evaGame: GameModule = {
     // ---- Rendering ----
     const drawThermalBackdrop = () => {
       if (cfg.terminatorMode === 'mild') {
-        // Gentle golden solar glow from upper-left
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        const g = ctx.createRadialGradient(-340, -185, 25, -210, -90, 620);
-        g.addColorStop(0, 'rgba(253, 224, 71, 0.20)');
-        g.addColorStop(0.55, 'rgba(251, 191, 36, 0.08)');
-        g.addColorStop(1, 'rgba(251, 191, 36, 0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(-WORLD_W * 0.6, -WORLD_H * 0.65, WORLD_W * 1.2, WORLD_H * 1.3);
-        ctx.restore();
+        ctx.fillStyle = 'rgba(253, 224, 71, 0.045)';
+        ctx.fillRect(-WORLD_W * 0.6, -WORLD_H * 0.65, WORLD_W * 0.62, WORLD_H * 1.3);
         return;
       }
 
-      // Bright +120°C Sunlight Zone (left of terminatorX) with directional golden rays
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const sunGrad = ctx.createLinearGradient(terminatorX - 320, -120, terminatorX + 36, 40);
-      sunGrad.addColorStop(0, 'rgba(253, 224, 71, 0.24)');
-      sunGrad.addColorStop(0.7, 'rgba(245, 158, 11, 0.13)');
-      sunGrad.addColorStop(1, 'rgba(245, 158, 11, 0)');
-      ctx.fillStyle = sunGrad;
-      ctx.fillRect(-WORLD_W * 0.7, -WORLD_H * 0.75, terminatorX + 36 + WORLD_W * 0.7, WORLD_H * 1.5);
-
-      // Slanted volumetric solar shafts strictly clipped to sunlit half
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(-WORLD_W * 0.7, -WORLD_H * 0.75, Math.max(0, terminatorX + WORLD_W * 0.7), WORLD_H * 1.5);
-      ctx.clip();
-      for (let i = 0; i < 4; i++) {
-        const sx = terminatorX - 75 - i * 115;
-        const rayGrad = ctx.createLinearGradient(sx - 60, -190, sx + 45, 155);
-        rayGrad.addColorStop(0, 'rgba(254, 243, 199, 0.14)');
-        rayGrad.addColorStop(0.6, 'rgba(251, 191, 36, 0.06)');
-        rayGrad.addColorStop(1, 'rgba(251, 191, 36, 0)');
-        ctx.strokeStyle = rayGrad;
-        ctx.lineWidth = 34;
-        ctx.beginPath();
-        ctx.moveTo(sx - 60, -190);
-        ctx.lineTo(sx + 45, 155);
-        ctx.stroke();
+      // Bright +120°C Sunlight Zone (left) & Deep -100°C Shadow Zone (right), flat fills (zero gradients/lighter)
+      const leftW = Math.max(0, terminatorX + WORLD_W * 0.7);
+      if (leftW > 0) {
+        ctx.fillStyle = 'rgba(253, 224, 71, 0.065)';
+        ctx.fillRect(-WORLD_W * 0.7, -WORLD_H * 0.75, leftW, WORLD_H * 1.5);
       }
-      ctx.restore();
-      ctx.restore();
 
-      // Deep -100°C Shadow Zone (right of terminatorX)
-      const shadGrad = ctx.createLinearGradient(terminatorX - 36, 0, terminatorX + 240, 0);
-      shadGrad.addColorStop(0, 'rgba(4, 12, 32, 0)');
-      shadGrad.addColorStop(0.35, 'rgba(4, 12, 34, 0.44)');
-      shadGrad.addColorStop(1, 'rgba(2, 8, 26, 0.64)');
-      ctx.fillStyle = shadGrad;
-      ctx.fillRect(terminatorX - 36, -WORLD_H * 0.75, WORLD_W * 1.4, WORLD_H * 1.5);
+      ctx.fillStyle = 'rgba(2, 8, 26, 0.56)';
+      ctx.fillRect(terminatorX, -WORLD_H * 0.75, WORLD_W * 1.4, WORLD_H * 1.5);
 
-      // Terminator boundary line with crisp optical rim glow
       ctx.save();
-      const termRim = ctx.createLinearGradient(terminatorX - 10, 0, terminatorX + 10, 0);
-      termRim.addColorStop(0, 'rgba(251, 191, 36, 0)');
-      termRim.addColorStop(0.45, 'rgba(254, 240, 138, 0.22)');
-      termRim.addColorStop(0.55, 'rgba(56, 189, 248, 0.22)');
-      termRim.addColorStop(1, 'rgba(56, 189, 248, 0)');
-      ctx.fillStyle = termRim;
-      ctx.fillRect(terminatorX - 10, -174, 20, 344);
-
-      ctx.strokeStyle = 'rgba(226, 240, 255, 0.62)';
+      ctx.strokeStyle = 'rgba(226, 240, 255, 0.72)';
       ctx.lineWidth = 1.6;
       ctx.setLineDash([7, 6]);
       ctx.beginPath();
@@ -1347,11 +1301,7 @@ export const evaGame: GameModule = {
       // Optional Level 3 Upper & Lower Exposed Metallic Truss Frames
       if (cfg.hasTrusses) {
         const drawTrussGirder = (x: number, y: number, w: number, h: number) => {
-          const g = ctx.createLinearGradient(x, y, x, y + h);
-          g.addColorStop(0, '#cbd5e1');
-          g.addColorStop(0.5, '#64748b');
-          g.addColorStop(1, '#334155');
-          ctx.strokeStyle = g;
+          ctx.strokeStyle = '#94a3b8';
           ctx.lineWidth = 3.2;
           ctx.strokeRect(x, y, w, h);
 
@@ -1376,151 +1326,73 @@ export const evaGame: GameModule = {
         drawTitaniumModule(ctx, 252, 48, 6, 66, { vertical: true, radius: 2, rivets: false });
       }
 
-      // Left Airlock Module Cylinder (问天气闸段) — brushed titanium + MLI collar
-      drawTitaniumModule(ctx, -412, -36, 164, 78, {
-        radius: 12,
-        mliBands: [0.07],
-        rivets: true,
-        rimGlow: 'rgba(226, 242, 255, 0.78)',
+      // 3D Studio-Rendered Pressurized Station Module Hull Segments (preserving exact 960:342 ratio)
+      const hullSeg1 = drawModelSprite(ctx, 'eva-station-hull', -412, -48, 276, 98);
+      const hullSeg2 = drawModelSprite(ctx, 'eva-station-hull', -138, -48, 276, 98, {
+        flipX: true,
       });
+      const hullSeg3 = drawModelSprite(ctx, 'eva-station-hull', 136, -48, 276, 98);
 
-      // Main Core / Experiment Module Body — brushed titanium + MLI bands
-      drawTitaniumModule(ctx, -248, -44, 412, 92, {
-        radius: 10,
-        mliBands: [0.03, 0.45, 0.88],
-        rivets: true,
-        rimGlow: 'rgba(241, 248, 255, 0.84)',
-      });
-
-      // Right Experiment Exposure Platform — brushed titanium + MLI bands
-      drawTitaniumModule(ctx, 164, -38, 248, 82, {
-        radius: 10,
-        mliBands: [0.16, 0.78],
-        rivets: true,
-        rimGlow: 'rgba(226, 242, 255, 0.78)',
-      });
-
-      // Prominent Crinkled Gold Kapton MLI Thermal Foil Blankets on hull equipment bays
-      const drawGoldMLI = (x: number, y: number, w: number, h: number) => {
-        ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.42)';
-        ctx.shadowBlur = 6;
-        ctx.shadowOffsetY = 2;
-        ctx.fillStyle = mli ?? '#d97706';
-        ctx.beginPath();
-        ctx.roundRect(x, y, w, h, 3);
-        ctx.fill();
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetY = 0;
-
-        // Cylindrical metallic specular & terminator shading over crinkled Kapton pattern
-        const wrap = ctx.createLinearGradient(x, y, x, y + h);
-        wrap.addColorStop(0, 'rgba(255, 252, 220, 0.34)');
-        wrap.addColorStop(0.26, 'rgba(255, 255, 255, 0.22)');
-        wrap.addColorStop(0.74, 'rgba(15, 10, 2, 0.38)');
-        wrap.addColorStop(1, 'rgba(30, 58, 100, 0.32)');
-        ctx.fillStyle = wrap;
-        ctx.beginPath();
-        ctx.roundRect(x, y, w, h, 3);
-        ctx.fill();
-
-        // Foil Kapton seam stitching & metallic retainer border
-        ctx.strokeStyle = 'rgba(254, 243, 199, 0.78)';
-        ctx.lineWidth = 1.1;
-        ctx.stroke();
-
-        // Corner titanium fastener pins
-        ctx.fillStyle = '#e2e8f0';
-        for (const [rx, ry] of [
-          [x + 4, y + 4],
-          [x + w - 4, y + 4],
-          [x + 4, y + h - 4],
-          [x + w - 4, y + h - 4],
-        ]) {
-          ctx.beginPath();
-          ctx.arc(rx, ry, 1.3, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-      };
-
-      drawGoldMLI(-215, -34, 62, 24);
-      drawGoldMLI(-20, 14, 78, 24);
-      drawGoldMLI(212, -26, 86, 26);
-      drawGoldMLI(316, 8, 66, 24);
-
-      // Module Ring Bulkhead Collars with recessed bevel highlight
-      for (const rx of [-248, -124, 16, 164, 298]) {
-        ctx.strokeStyle = 'rgba(15, 23, 42, 0.58)';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(rx, -42);
-        ctx.lineTo(rx, 46);
-        ctx.stroke();
-
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(rx + 2, -42);
-        ctx.lineTo(rx + 2, 46);
-        ctx.stroke();
+      // Machined titanium bulkhead coupler collars joining hull segments seamlessly
+      if (hullSeg1 && hullSeg2 && hullSeg3) {
+        drawTitaniumModule(ctx, -149, -35, 24, 72, {
+          radius: 4,
+          mliBands: [0.28],
+          rivets: false,
+          rimGlow: 'rgba(186, 230, 253, 0.72)',
+        });
+        drawTitaniumModule(ctx, 126, -35, 22, 72, {
+          radius: 4,
+          mliBands: [0.3],
+          rivets: false,
+          rimGlow: 'rgba(186, 230, 253, 0.72)',
+        });
       }
 
-      // Tiangong Accent Stripe & Station Labels
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-242, -5, 398, 4);
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(-242, 1, 398, 2);
-
-      // Illuminated Recessed Optical Glass Porthole Windows with cabin radiance
-      for (const wx of [-170, -60, 62, 242]) {
-        drawAdditiveGlow(ctx, wx, 18, 17, '56, 189, 248', 0.34);
-        drawGlassViewport(ctx, wx - 8.5, 9.5, 17, 17, 8.5, 'rgba(14, 165, 233, 0.48)');
+      if (!hullSeg1 || !hullSeg2 || !hullSeg3) {
+        drawTitaniumModule(ctx, -412, -36, 164, 78, {
+          radius: 12,
+          mliBands: [0.07],
+          rivets: true,
+          rimGlow: 'rgba(226, 242, 255, 0.78)',
+        });
+        drawTitaniumModule(ctx, -248, -44, 412, 92, {
+          radius: 10,
+          mliBands: [0.03, 0.45, 0.88],
+          rivets: true,
+          rimGlow: 'rgba(241, 248, 255, 0.84)',
+        });
+        drawTitaniumModule(ctx, 164, -38, 248, 82, {
+          radius: 10,
+          mliBands: [0.16, 0.78],
+          rivets: true,
+          rimGlow: 'rgba(226, 242, 255, 0.78)',
+        });
       }
+      void mli;
 
-      // Subtle hull lettering
-      ctx.font = '700 10px "JetBrains Mono", monospace';
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.textAlign = 'center';
-      ctx.fillText('问天气闸', -330, 10);
-      ctx.fillText('CSS · 天宫核心舱', -42, -16);
-      ctx.fillText('暴露实验平台', 288, -14);
-
-      // Airlock Hatch Beacon with volumetric additive radiance & metallic hatch glass
+      // Airlock Hatch Beacon
       const allRepaired = nodes.every((n) => n.repaired);
       const ax = cfg.airlock.x;
       const ay = cfg.airlock.y;
-      const pulse = 0.5 + 0.5 * Math.sin(simTime * (allRepaired ? 6 : 2.5));
-
-      drawAdditiveGlow(
-        ctx,
-        ax,
-        ay,
-        allRepaired ? 48 + pulse * 18 : 34 + pulse * 8,
-        allRepaired ? '34, 197, 94' : '56, 189, 248',
-        allRepaired ? 0.58 + pulse * 0.24 : 0.34 + pulse * 0.14
-      );
+      const strobeCol = allRepaired ? '#4ade80' : '#38bdf8';
 
       drawTitaniumModule(ctx, ax - 24, ay - 9, 48, 20, {
         radius: 5,
         rivets: false,
-        rimGlow: allRepaired ? '#4ade80' : '#38bdf8',
+        rimGlow: strobeCol,
       });
-      drawGlassViewport(
-        ctx,
-        ax - 17,
-        ay - 5,
-        34,
-        12,
-        3.5,
-        allRepaired ? 'rgba(34, 197, 94, 0.52)' : 'rgba(14, 165, 233, 0.42)'
-      );
+      ctx.fillStyle = allRepaired ? 'rgba(34, 197, 94, 0.56)' : 'rgba(14, 165, 233, 0.46)';
+      ctx.beginPath();
+      ctx.roundRect(ax - 17, ay - 5, 34, 12, 3.5);
+      ctx.fill();
 
       // Twin status strobe LEDs on hatch corners
-      const strobeRgb = allRepaired ? '74, 222, 128' : '56, 189, 248';
-      drawAdditiveGlow(ctx, ax - 21, ay, 9, strobeRgb, 0.45 + pulse * 0.4);
-      drawAdditiveGlow(ctx, ax + 21, ay, 9, strobeRgb, 0.45 + pulse * 0.4);
+      ctx.fillStyle = strobeCol;
+      ctx.beginPath();
+      ctx.arc(ax - 21, ay, 2.2, 0, Math.PI * 2);
+      ctx.arc(ax + 21, ay, 2.2, 0, Math.PI * 2);
+      ctx.fill();
 
       ctx.font = '700 10px "JetBrains Mono", monospace';
       ctx.fillStyle = allRepaired ? '#4ade80' : '#7dd3fc';
@@ -1595,16 +1467,8 @@ export const evaGame: GameModule = {
         ctx.stroke();
       }
 
-      // Highlight nearest handrail grip indicator with additive lock glow
+      // Highlight nearest handrail grip indicator
       if (nearRailPt && !repairingNodeId) {
-        drawAdditiveGlow(
-          ctx,
-          nearRailPt.x,
-          nearRailPt.y,
-          grabbingRail ? 18 : 13,
-          grabbingRail ? '74, 222, 128' : '56, 189, 248',
-          grabbingRail ? 0.65 : 0.45
-        );
         ctx.strokeStyle = grabbingRail ? '#22c55e' : 'rgba(56, 189, 248, 0.78)';
         ctx.lineWidth = grabbingRail ? 2.4 : 1.5;
         ctx.setLineDash(grabbingRail ? [] : [4, 4]);
@@ -1627,17 +1491,13 @@ export const evaGame: GameModule = {
       const candidate = findBestReclipAnchor();
 
       ctx.save();
-      // Draw Anchor Rings with metallic bezel & luminous status bloom
+      // Draw Anchor Rings (flat metallic ring, zero gradients/additive glow)
       for (const a of cfg.anchors) {
         const isActive = a.id === activeAnchorId;
         const isCand = candidate?.id === a.id;
 
-        if (isActive) {
-          drawAdditiveGlow(ctx, a.x, a.y, 18, '34, 197, 94', 0.44);
-        }
         if (isCand) {
           const p = 0.5 + 0.5 * Math.sin(simTime * 7);
-          drawAdditiveGlow(ctx, a.x, a.y, 24 + p * 6, '56, 189, 248', 0.52);
           ctx.strokeStyle = '#38bdf8';
           ctx.lineWidth = 2;
           ctx.beginPath();
@@ -1650,12 +1510,7 @@ export const evaGame: GameModule = {
           ctx.fillText(`[C] 转挂 ${a.id}`, a.x, a.y - 21);
         }
 
-        // Brushed metallic carabiner ring collar
-        const ringGrad = ctx.createRadialGradient(a.x - 2, a.y - 2, 1, a.x, a.y, 8.5);
-        ringGrad.addColorStop(0, isActive ? '#86efac' : isCand ? '#bae6fd' : '#cbd5e1');
-        ringGrad.addColorStop(0.65, isActive ? '#16a34a' : isCand ? '#0284c7' : '#334155');
-        ringGrad.addColorStop(1, '#0f172a');
-        ctx.fillStyle = ringGrad;
+        ctx.fillStyle = isActive ? '#16a34a' : isCand ? '#0284c7' : '#334155';
         ctx.strokeStyle = isActive ? '#bbf7d0' : isCand ? '#7dd3fc' : '#94a3b8';
         ctx.lineWidth = 1.8;
         ctx.beginPath();
@@ -1689,11 +1544,9 @@ export const evaGame: GameModule = {
       const tautColor =
         tetherRatio > 0.96 ? '#ef4444' : tetherRatio > 0.82 ? '#f59e0b' : '#eab308';
 
-      // Tension glow when cable approaches max radius
+      // Tension warning collar when cable approaches max radius
       if (tetherRatio > 0.82) {
         const tRgb = tetherRatio > 0.96 ? '239, 68, 68' : '245, 158, 11';
-        drawAdditiveGlow(ctx, active.x, active.y, 16, tRgb, 0.52);
-        drawAdditiveGlow(ctx, astroX, astroY + 4, 15, tRgb, 0.45);
         ctx.strokeStyle = `rgba(${tRgb}, 0.28)`;
         ctx.lineWidth = 7;
         ctx.beginPath();
@@ -1751,29 +1604,16 @@ export const evaGame: GameModule = {
         const arcFlicker = 0.5 + 0.5 * Math.sin(simTime * 27 + n.x * 1.7);
         const isNear = !n.repaired && dist(astroX, astroY, n.x, n.y) < 58;
 
-        // Volumetric additive bloom on fault arcs or repaired nominal beacon
-        if (n.repaired) {
-          drawAdditiveGlow(ctx, n.x, n.y, 28, '34, 197, 94', 0.42);
-        } else {
-          drawAdditiveGlow(ctx, n.x, n.y, 34 + pulse * 10, '245, 158, 11', 0.42 + pulse * 0.2);
-          drawAdditiveGlow(ctx, n.x, n.y, 19 + arcFlicker * 8, '56, 189, 248', 0.34 + arcFlicker * 0.36);
-        }
-
         // Brushed titanium recessed equipment housing
         drawTitaniumModule(ctx, n.x - 15, n.y - 13, 30, 26, {
           radius: 4.5,
           rivets: false,
           rimGlow: n.repaired ? '#22c55e' : isNear ? '#38bdf8' : '#f59e0b',
         });
-        drawGlassViewport(
-          ctx,
-          n.x - 11,
-          n.y - 9,
-          22,
-          18,
-          3,
-          n.repaired ? 'rgba(6, 78, 59, 0.72)' : 'rgba(12, 20, 38, 0.85)'
-        );
+        ctx.fillStyle = n.repaired ? 'rgba(6, 78, 59, 0.82)' : 'rgba(12, 20, 38, 0.9)';
+        ctx.beginPath();
+        ctx.roundRect(n.x - 11, n.y - 9, 22, 18, 3);
+        ctx.fill();
 
         // Inner Status Icon or live electric fault arc
         if (n.repaired) {
@@ -1786,12 +1626,9 @@ export const evaGame: GameModule = {
           ctx.lineTo(n.x + 7, n.y - 5);
           ctx.stroke();
         } else {
-          // Animated glowing electric fault arc bolt with white plasma core
           const jx = (arcFlicker - 0.5) * 3.2;
-          ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
           ctx.strokeStyle = pulse > 0.5 ? '#fde047' : '#38bdf8';
-          ctx.lineWidth = 3.2;
+          ctx.lineWidth = 3;
           ctx.lineCap = 'round';
           ctx.beginPath();
           ctx.moveTo(n.x - 6, n.y - 6);
@@ -1801,14 +1638,12 @@ export const evaGame: GameModule = {
           ctx.stroke();
 
           ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1.2;
+          ctx.lineWidth = 1.1;
           ctx.stroke();
-          ctx.restore();
         }
 
-        // Repair progress ring with additive radiance
+        // Repair progress ring
         if (!n.repaired && n.progress > 0) {
-          drawAdditiveGlow(ctx, n.x, n.y, 28, '34, 211, 238', 0.45);
           ctx.strokeStyle = '#22d3ee';
           ctx.lineWidth = 3.6;
           ctx.lineCap = 'round';
@@ -1838,205 +1673,17 @@ export const evaGame: GameModule = {
     };
 
     const drawAstronaut = () => {
-      ctx.save();
-      ctx.translate(astroX, astroY);
-      ctx.rotate(astroTilt);
-
-      // Suit thermal aura indicator when hot or cold (additive optical warning bloom)
-      if (suitTemp > 29 || suitTemp < 15) {
-        const hot = suitTemp > 29;
-        drawAdditiveGlow(
-          ctx,
-          0,
-          0,
-          34 + Math.sin(simTime * 10) * 4,
-          hot ? '239, 68, 68' : '56, 189, 248',
-          0.46
-        );
-      }
-
-      const f = astroFacing;
-      const grain = getTitaniumPattern(ctx);
-
-      // PLSS Life-Support Backpack with cylindrical metallic shading
-      const bx = f > 0 ? -16.5 : 6.5;
-      const packGrad = ctx.createLinearGradient(bx, -13, bx + 10, 9);
-      packGrad.addColorStop(0, '#eef5fc');
-      packGrad.addColorStop(0.45, '#b6c8de');
-      packGrad.addColorStop(1, '#48607e');
-      ctx.fillStyle = packGrad;
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.roundRect(bx, -13, 10, 22, 3);
-      ctx.fill();
-      ctx.stroke();
-
-      // Backpack Thermal Loop Indicator LED with additive glow
-      const ledRgb =
-        thermalMode === 'cool' ? '56, 189, 248' : thermalMode === 'heat' ? '249, 115, 22' : '34, 197, 94';
-      const ledHex =
-        thermalMode === 'cool' ? '#38bdf8' : thermalMode === 'heat' ? '#f97316' : '#22c55e';
-      const ledX = f > 0 ? -14 : 8;
-      drawAdditiveGlow(ctx, ledX + 3, -7, 9, ledRgb, 0.58);
-      ctx.fillStyle = ledHex;
-      ctx.fillRect(ledX, -9, 6, 4);
-
-      // Legs (slightly bent zero-G posture) with metallic cylindrical shading & joint rings
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 6.6;
-      ctx.beginPath();
-      ctx.moveTo(-3, 9);
-      ctx.lineTo(-6 * f, 18);
-      ctx.moveTo(3, 9);
-      ctx.lineTo(5 * f, 17);
-      ctx.stroke();
-
-      ctx.strokeStyle = '#e8f1fa';
-      ctx.lineWidth = 4.8;
-      ctx.beginPath();
-      ctx.moveTo(-3, 9);
-      ctx.lineTo(-6 * f, 18);
-      ctx.moveTo(3, 9);
-      ctx.lineTo(5 * f, 17);
-      ctx.stroke();
-
-      // Knee mobility bellows rings
-      ctx.fillStyle = '#94a3b8';
-      ctx.beginPath();
-      ctx.arc(-4.5 * f, 13.5, 2.2, 0, Math.PI * 2);
-      ctx.arc(4 * f, 13, 2.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Machined titanium thermal boots
-      const bootGrad = ctx.createRadialGradient(-6 * f - 1, 18, 0.5, -6 * f, 19, 3.6);
-      bootGrad.addColorStop(0, '#cbd5e1');
-      bootGrad.addColorStop(1, '#334155');
-      ctx.fillStyle = bootGrad;
-      ctx.beginPath();
-      ctx.arc(-6 * f, 19, 3.4, 0, Math.PI * 2);
-      ctx.arc(5 * f, 18, 3.4, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Feitian Pressurized Hard-Upper-Torso (HUT) with sunlit metallic specular & Earth albedo rim
-      const torsoGrad = ctx.createLinearGradient(-9, -9, 9, 11);
-      torsoGrad.addColorStop(0, '#ffffff');
-      torsoGrad.addColorStop(0.28, '#eef5fc');
-      torsoGrad.addColorStop(0.68, '#a6bcd4');
-      torsoGrad.addColorStop(0.92, '#4c6482');
-      torsoGrad.addColorStop(1, '#5882b0');
-      ctx.fillStyle = torsoGrad;
-      ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.roundRect(-9.5, -9, 19, 20, 6);
-      ctx.fill();
-      ctx.save();
-      ctx.clip();
-      if (grain) {
-        ctx.fillStyle = grain;
-        ctx.fillRect(-10, -9, 20, 20);
-      }
-      ctx.restore();
-      ctx.stroke();
-
-      // Feitian Crimson/Blue Mission Chest Stripe & Recessed DCM Telemetry Module
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(-7.5, -4, 15, 2.2);
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(-7.5, -1.5, 15, 1.3);
-
-      const tempStripColor =
-        suitTemp > 30 ? '#ef4444' : suitTemp < 14 ? '#38bdf8' : '#22c55e';
-      const tempRgb =
-        suitTemp > 30 ? '239, 68, 68' : suitTemp < 14 ? '56, 189, 248' : '34, 197, 94';
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.roundRect(-6, 1.5, 12, 5.5, 1.5);
-      ctx.fill();
-      drawAdditiveGlow(ctx, 0, 4.2, 7, tempRgb, 0.45);
-      ctx.fillStyle = tempStripColor;
-      ctx.fillRect(-4.5, 2.8, 9, 2.8);
-
-      // Articulated Arm (reaching out when grabbing or repairing) with metallic cuff
-      ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 5.6;
-      ctx.beginPath();
-      ctx.moveTo(5 * f, -4);
-      ctx.lineTo(14 * f, grabbingRail ? 2 : -1);
-      ctx.stroke();
-
-      ctx.strokeStyle = '#eef5fc';
-      ctx.lineWidth = 4.0;
-      ctx.beginPath();
-      ctx.moveTo(5 * f, -4);
-      ctx.lineTo(14 * f, grabbingRail ? 2 : -1);
-      ctx.stroke();
-
-      // Red Feitian wrist cuff ring + pressurized glove
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.arc(11.5 * f, grabbingRail ? 0.5 : -1.8, 2.1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.arc(14.5 * f, grabbingRail ? 2 : -1, 2.4, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Helmet Shell with spherical metallic specular highlight & Earth-albedo rim
-      const helmGrad = ctx.createRadialGradient(-3 * f, -20, 1.5, 0, -16, 11);
-      helmGrad.addColorStop(0, '#ffffff');
-      helmGrad.addColorStop(0.45, '#e6f0fa');
-      helmGrad.addColorStop(0.82, '#7d95b2');
-      helmGrad.addColorStop(1, '#3b5d85');
-      ctx.fillStyle = helmGrad;
-      ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.arc(0, -16, 10.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      // Reflective 24K Gold Coated Sun Visor with curved Earth-limb reflection & specular arc
-      ctx.save();
-      ctx.beginPath();
-      ctx.ellipse(3.6 * f, -16, 6.4, 7.0, 0, 0, Math.PI * 2);
-      const visorGrad = ctx.createRadialGradient(5.2 * f, -19.5, 1.2, 3.2 * f, -15.5, 8.2);
-      visorGrad.addColorStop(0, '#fffbeb');
-      visorGrad.addColorStop(0.24, '#fde047');
-      visorGrad.addColorStop(0.58, '#d97706');
-      visorGrad.addColorStop(0.86, '#78350f');
-      visorGrad.addColorStop(1, '#451a03');
-      ctx.fillStyle = visorGrad;
-      ctx.fill();
-
-      // Clip specular highlights strictly inside curved visor dome
-      ctx.clip();
-      // Subtle reflected cyan Earth horizon curve on lower visor
-      ctx.strokeStyle = 'rgba(125, 211, 252, 0.55)';
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.arc(3.6 * f, -9.2, 6.4, Math.PI * 1.15, Math.PI * 1.85);
-      ctx.stroke();
-
-      // Crisp curved crescent solar specular highlight along upper visor dome
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.88)';
-      ctx.lineWidth = 1.7;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.arc(3.2 * f, -15.8, 4.6, f > 0 ? -Math.PI * 0.62 : -Math.PI * 0.85, f > 0 ? -Math.PI * 0.15 : -Math.PI * 0.38);
-      ctx.stroke();
-      ctx.restore();
-
-      // Gold metallic visor rim bezel
-      ctx.strokeStyle = 'rgba(254, 243, 199, 0.72)';
-      ctx.lineWidth = 0.9;
-      ctx.beginPath();
-      ctx.ellipse(3.6 * f, -16, 6.4, 7.0, 0, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.restore();
+      drawFeitianAstronaut3D(ctx, {
+        x: astroX,
+        y: astroY,
+        facing: astroFacing >= 0 ? 1 : -1,
+        tilt: astroTilt,
+        simTime,
+        thermalMode,
+        suitTemp,
+        grabbing: grabbingRail,
+        showAura: true,
+      });
     };
 
     const drawPhysicsOverlay = () => {
@@ -2127,21 +1774,15 @@ export const evaGame: GameModule = {
     };
 
     const render = () => {
-      starfield.draw(ctx, viewW, viewH, simTime, -simTime * 3.5, 0);
-      drawEarthHorizon(ctx, viewW, viewH, simTime, {
-        yRatio: 1.78,
-        radiusScale: 1.18,
-        sunPhase: cfg.terminatorMode === 'moving' ? 0.5 + levelTime * 0.05 : 0.4,
-        nightMode: levelIndex >= 1,
-        darken: 0.25,
-      });
-
-      // Sunlit directional golden lens flare over the sunlit half of the station
-      if (cfg.terminatorMode === 'mild') {
-        drawSunLensFlare(ctx, viewW * 0.14, viewH * 0.17, 28, 0.78);
-      } else {
-        const sunScreenX = clamp(originX + (terminatorX - 245) * scale, viewW * 0.08, viewW * 0.48);
-        drawSunLensFlare(ctx, sunScreenX, viewH * 0.17, 30, 0.92);
+      if (!drawBakedBackdrop(ctx, levelIndex >= 1 ? 'earth-night' : 'leo-earth', viewW, viewH, 0.25, 0.32)) {
+        starfield.draw(ctx, viewW, viewH, simTime, -simTime * 3.5, 0);
+        drawEarthHorizon(ctx, viewW, viewH, simTime, {
+          yRatio: 1.78,
+          radiusScale: 1.18,
+          sunPhase: cfg.terminatorMode === 'moving' ? 0.5 + levelTime * 0.05 : 0.4,
+          nightMode: levelIndex >= 1,
+          darken: 0.25,
+        });
       }
 
       ctx.save();

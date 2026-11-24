@@ -1,4 +1,5 @@
 import type { GameId } from './game-interface';
+import type { PerfPreference } from './perf-profile';
 
 export interface GameProgressRecord {
   stars: [number, number, number];
@@ -11,6 +12,7 @@ export interface SaveState {
   games: Record<GameId, GameProgressRecord>;
   unlockedCodex: string[];
   muted: boolean;
+  perfMode?: PerfPreference;
 }
 
 const STORAGE_KEY = 'tiangong_orbital_lab_save_v1';
@@ -40,6 +42,7 @@ function createDefaultState(): SaveState {
     games,
     unlockedCodex: ['docking-inertia', 'solar-eclipse', 'eclss-electrolysis', 'zerog-water-lens'],
     muted: false,
+    perfMode: 'auto',
   };
 }
 
@@ -82,6 +85,9 @@ export class SaveStore {
         merged.unlockedCodex = Array.from(new Set([...fallback.unlockedCodex, ...parsed.unlockedCodex]));
       }
       merged.muted = Boolean(parsed.muted);
+      if (parsed.perfMode === 'auto' || parsed.perfMode === 'high' || parsed.perfMode === 'low') {
+        merged.perfMode = parsed.perfMode;
+      }
       return merged;
     } catch {
       return fallback;
@@ -164,6 +170,15 @@ export class SaveStore {
 
   setMuted(muted: boolean): void {
     this.state.muted = muted;
+    this.persist();
+  }
+
+  getPerfMode(): PerfPreference {
+    return this.state.perfMode ?? 'auto';
+  }
+
+  setPerfMode(mode: PerfPreference): void {
+    this.state.perfMode = mode;
     this.persist();
   }
 }

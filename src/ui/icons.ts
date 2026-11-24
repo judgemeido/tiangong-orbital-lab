@@ -23,6 +23,7 @@ export const UI_ICONS = {
   tele: `<svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="8" r="2.6" fill="currentColor"/><circle cx="8" cy="8" r="6" stroke-dasharray="2.5 2"/></svg>`,
   close: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`,
   arrowRight: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`,
+  perf: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" fill="currentColor" fill-opacity="0.25"/><path d="M12 13l4-4"/><path d="M5.6 18.4a9 9 0 1 1 12.8 0"/></svg>`,
 };
 
 export const GAME_ICONS: Record<GameId, string> = {
